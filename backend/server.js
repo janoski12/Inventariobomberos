@@ -30,6 +30,27 @@ app.post("/bomberos", (req, res) => {
     res.status(201).json({ id: info.lastInsertRowid });
 });
 
+//Editar bombero
+app.put("/bomberos/:id", (req, res) => {
+    const id = Number(req.params.id);
+    const {
+        nombre,
+        cargo,
+        estado,
+        observaciones
+    } = req.body;
+
+    const existe = db.prepare("SELECT * FROM bombero WHERE id=?").get(id);
+    if (!existe) return res.status(404).json({ error: "Bombero no encontrado" });
+
+    db.prepare(`
+        UPDATE bombero SET nombre=?, cargo=?, estado=?, observaciones=?
+        WHERE id=?    
+    `).run(nombre, cargo ?? null, estado ?? null, observaciones ?? null, id);
+
+    res.json({ ok: true });
+});
+
 //Listar bomberos
 app.get("/bomberos", (req, res) => {
     const rows = db.prepare(`SELECT * FROM bombero ORDER BY nombre`).all();
@@ -54,6 +75,26 @@ app.post("/ubicaciones", (req, res) => {
 
     const info = stmt.run(nombre, tipo ?? null, responsable ?? null, codigo_qr ?? null);
     res.status(201).json({ id: info.lastInsertRowid });
+});
+
+app.put("/ubicaciones/:id", (req, res) => {
+    const id = Number(req.params.id);
+    const {
+        nombre,
+        tipo,
+        responsable,
+        codigo_qr
+    } = req.body;
+
+    const existe = db.prepare("SELECT * FROM ubicacion WHERE id=?").get(id);
+    if (!existe) return res.status(404).json({ error: "Ubicacion no encontrada" });
+
+    db.prepare(`
+        UPDATE ubicacion SET nombre=?, tipo=?, responsable=?, codigo_qr=?
+        WHERE id=?    
+    `).run(nombre, tipo ?? null, responsable ?? null, codigo_qr ?? null, typeof activo === "number" ? activo : (activo ? 1 : 0), id);
+
+    res.json({ ok: true });
 });
 
 //Listar ubicaciones

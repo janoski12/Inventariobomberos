@@ -9,7 +9,7 @@ export default function Bomberos() {
 
   const [form, setForm] = useState({
     nombre: "",
-    cargo: "",
+    grado: "",
     estado: "ACTIVO",
     observaciones: "",
   });
@@ -35,7 +35,7 @@ export default function Bomberos() {
   const puedeGuardar = form.nombre.trim().length > 0;
 
   return (
-    <div className="containter">
+    <div className="container">
       <h2 style={{ marginTop: 0 }}>Bomberos</h2>
 
       <div className="card">
@@ -47,9 +47,8 @@ export default function Bomberos() {
             <input
               className="input"
               value={form.nombre}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, nombre: e.target.value }))
-              }
+              onChange={(e) => setForm((p) => ({ ...p, nombre: e.target.value }))}
+              placeholder="Ej: Juan Pérez"
             />
           </label>
 
@@ -58,9 +57,7 @@ export default function Bomberos() {
             <input
               className="input"
               value={form.cargo}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, cargo: e.target.value }))
-              }
+              onChange={(e) => setForm((p) => ({ ...p, cargo: e.target.value }))}
               placeholder="Ej: Teniente / Voluntario"
             />
           </label>
@@ -70,9 +67,7 @@ export default function Bomberos() {
             <select
               className="input"
               value={form.estado}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, estado: e.target.value }))
-              }
+              onChange={(e) => setForm((p) => ({ ...p, estado: e.target.value }))}
             >
               <option value="ACTIVO">ACTIVO</option>
               <option value="INACTIVO">INACTIVO</option>
@@ -84,18 +79,13 @@ export default function Bomberos() {
             <input
               className="input"
               value={form.observaciones}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, observaciones: e.target.value }))
-              }
-              placeholder="OPCIONAL"
+              onChange={(e) => setForm((p) => ({ ...p, observaciones: e.target.value }))}
+              placeholder="Opcional"
             />
           </label>
         </div>
 
-        <div
-          className="row"
-          style={{ justifyContent: "flex-end", marginTop: 12 }}
-        >
+        <div className="row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
           <button
             className="btn"
             disabled={!puedeGuardar || guardando}
@@ -105,22 +95,17 @@ export default function Bomberos() {
                 setGuardando(true);
                 await crearBombero({
                   nombre: form.nombre.trim(),
-                  cargo: form.cargo.trim() || null,
+                  grado: form.grado.trim() || null,
                   estado: form.estado,
-                  obsevaciones: form.observaciones.trim() || null,
+                  observaciones: form.observaciones.trim() || null,
                 });
 
-                setForm({
-                  nombre: "",
-                  cargo: "",
-                  estado: "ACTIVO",
-                  observaciones: "",
-                });
+                setForm({ nombre: "", grado: "", estado: "ACTIVO", observaciones: "" });
                 await cargar();
-                alert("Bombero Creado");
+                alert("Bombero creado ");
               } catch (e) {
                 console.error(e);
-                alert("No se pudo crear bombero (revisar backend).");
+                alert("No se pudo crear bombero (revisa backend).");
               } finally {
                 setGuardando(false);
               }
@@ -131,29 +116,28 @@ export default function Bomberos() {
         </div>
 
         <div className="muted" style={{ marginTop: 10 }}>
-          Tip: usa el nombre completo para evitar duplicados
+          Tip: usa el nombre completo para evitar duplicados.
         </div>
       </div>
 
       <h3 style={{ marginTop: 18 }}>Listado</h3>
-      {cargando ? <p className="muted">Cargando...</p> : null}
-      {error ? <p className="error">{error}</p> : error}
+      {cargando ? <p className="muted">Cargando…</p> : null}
+      {error ? <p className="error">{error}</p> : null}
 
       <div className="stack">
         {lista.map((b) => (
-            <div key={b.id} className="card clickable">
-                <div className="spread">
-                    <div className="card-title">{b.nombre}</div>
-                    <div className="muted">{b.estado ?? "-"}</div>
-                </div>
-                <div className="card-muted" style={{ marginTop: 6 }}>
-                    {b.cargo ? `Cargo: ${b.cargo}` : "Cargo: -"}
-                    {b.observaciones ? ` Obs: ${b.observaciones}` : ""}
-                </div>
+          <div key={b.id} className="card clickable">
+            <div className="spread">
+              <div className="card-title">{b.nombre}</div>
+              <div className="muted">{b.estado ?? "-"}</div>
             </div>
+            <div className="card-muted" style={{ marginTop: 6 }}>
+              {b.cargo ? `Cargo: ${b.cargo}` : "Cargo: -"}
+              {b.observaciones ? ` • Obs: ${b.observaciones}` : ""}
+            </div>
+          </div>
         ))}
       </div>
     </div>
   );
 }
-
