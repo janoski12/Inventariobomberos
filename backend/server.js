@@ -83,14 +83,15 @@ app.put("/ubicaciones/:id", (req, res) => {
         nombre,
         tipo,
         responsable,
-        codigo_qr
+        codigo_qr,
+        activo
     } = req.body;
 
     const existe = db.prepare("SELECT * FROM ubicacion WHERE id=?").get(id);
     if (!existe) return res.status(404).json({ error: "Ubicacion no encontrada" });
 
     db.prepare(`
-        UPDATE ubicacion SET nombre=?, tipo=?, responsable=?, codigo_qr=?
+        UPDATE ubicacion SET nombre=?, tipo=?, responsable=?, codigo_qr=?, activo=?
         WHERE id=?    
     `).run(nombre, tipo ?? null, responsable ?? null, codigo_qr ?? null, typeof activo === "number" ? activo : (activo ? 1 : 0), id);
 
@@ -176,6 +177,40 @@ app.get("/items", (req, res) => {
   `).all(like, like);
 
   res.json(rows);
+});
+
+app.put("/items/:id", (req, res) => {
+    const id = Number(req.params.id);
+    const {
+        codigo,
+        categoria,
+        subcategoria,
+        descripcion,
+        marca,
+        modelo,
+        serie,
+        criticidad
+    } = req.body;
+
+    const existe = db.prepare("SELECT * FROM item WHERE id=?").get(id);
+    if (!existe) return res.status(404).json({ error: "Item no encontrado" });
+
+    db.prepare(`
+        UPDATE item SET 
+        codigo=?, categoria=?, subcategoria=?, descripcion=?, marca=?, modelo=?, serie=?, criticidad=?, actualizado_en=datetime('now')
+        WHERE id=?    
+    `).run(
+        codigo ?? null, 
+        categoria ?? null, 
+        subcategoria ?? null, 
+        descripcion, marca ?? null, 
+        modelo ?? null, 
+        serie ?? null,
+        criticidad ?? null, 
+        id
+    );
+
+    res.json({ ok: true });
 });
 
 app.get("/items/:id/movimientos", (req, res) => {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { crearUbicacion, listarUbicaciones } from "../api/ubicaciones";
+import { actualizarUbicacion, crearUbicacion, listarUbicaciones } from "../api/ubicaciones";
+import Modal from "../components/Modal";
 
 export default function Ubicaciones() {
   const [lista, setLista] = useState([]);
@@ -14,6 +15,9 @@ export default function Ubicaciones() {
     codigo_qr: "",
     activo: 1,
   });
+
+  const [openEdit, setOpenEdit] = useState(false);
+  const [edit, setEdit] = useState(null);
 
   async function cargar() {
     setError("");
@@ -158,19 +162,127 @@ export default function Ubicaciones() {
 
       <div className="stack">
         {lista.map((u) => (
-          <div key={u.id} className="card clickable">
+          <div key={u.id} className="card">
             <div className="spread">
-              <div className="card-title">{u.nombre}</div>
-              <div className="muted">{u.tipo ?? "-"}</div>
-            </div>
-            <div className="card-muted" style={{ marginTop: 6 }}>
-              Activo: {u.activo ? "Si" : "No"}
-              {u.responsable ? ` • Responsable: ${u.responsable}` : ""}
-              {u.codigo_qr ? `QR: ${u.codigo_qr}` : ""}
+              <div>
+                <div className="card-title">{u.nombre}</div>
+                <div className="card-muted" style={{ marginTop: 6 }}>
+                  Tipo: {u.tipo ?? "-"} • Activo: {u.activo ? "Sí" : "No"}
+                  {u.responsable ? ` • Resp: ${u.responsable}` : ""}
+                  {u.codigo_qr ? ` • QR: ${u.codigo_qr}` : ""}
+                </div>
+              </div>
+
+              <button
+                className="btn-light"
+                onClick={() => {
+                  setEdit({
+                    id: u.id,
+                    nombre: u.nombre ?? "",
+                    tipo: u.tipo ?? "BODEGA",
+                    responsable: u.responsable ?? "",
+                    codigo_qr: u.codigo_qr ?? "",
+                    activo: u.activo ? 1 : 0,
+                  });
+                  setOpenEdit(true);
+                }}
+              >
+                Editar
+              </button>
             </div>
           </div>
         ))}
       </div>
+
+      {/* Modal editar */}
+      <Modal open={openEdit} title="Editar ubicación" onClose={() => setOpenEdit(false)}>
+        {edit ? (
+          <div className="stack">
+            <label className="label">
+              Nombre
+              <input
+                className="input"
+                value={edit.nombre}
+                onChange={(e) => setEdit((p) => ({ ...p, nombre: e.target.value }))}
+              />
+            </label>
+
+            <label className="label">
+              Tipo
+              <select
+                className="input"
+                value={edit.tipo}
+                onChange={(e) => setEdit((p) => ({ ...p, tipo: e.target.value }))}
+              >
+                <option value="BODEGA">BODEGA</option>
+                <option value="SALA">SALA</option>
+                <option value="CARRO">CARRO</option>
+                <option value="CASILLERO">CASILLERO</option>
+                <option value="OTRO">OTRO</option>
+              </select>
+            </label>
+
+            <label className="label">
+              Responsable
+              <input
+                className="input"
+                value={edit.responsable}
+                onChange={(e) => setEdit((p) => ({ ...p, responsable: e.target.value }))}
+              />
+            </label>
+
+            <label className="label">
+              Activo
+              <select
+                className="input"
+                value={String(edit.activo)}
+                onChange={(e) => setEdit((p) => ({ ...p, activo: Number(e.target.value) }))}
+              >
+                <option value="1">Sí</option>
+                <option value="0">No</option>
+              </select>
+            </label>
+
+            <label className="label">
+              Código QR
+              <input
+                className="input"
+                value={edit.codigo_qr}
+                onChange={(e) => setEdit((p) => ({ ...p, codigo_qr: e.target.value }))}
+              />
+            </label>
+
+            <div className="row" style={{ justifyContent: "flex-end" }}>
+              <button className="btn-light" onClick={() => setOpenEdit(false)}>Cancelar</button>
+              <button
+                className="btn"
+                disabled={!edit.nombre.trim() || guardando}
+                onClick={async () => {
+                  try {
+                    setGuardando(true);
+                    await actualizarUbicacion(edit.id, {
+                      nombre: edit.nombre.trim(),
+                      tipo: edit.tipo,
+                      responsable: edit.responsable.trim() || null,
+                      codigo_qr: edit.codigo_qr.trim() || null,
+                      activo: Number(edit.activo),
+                    });
+                    await cargar();
+                    setOpenEdit(false);
+                  } catch (e) {
+                    console.error(e);
+                    alert("No se pudo actualizar ubicación.");
+                  } finally {
+                    setGuardando(false);
+                  }
+                }}
+              >
+                Guardar cambios
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

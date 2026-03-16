@@ -15,3 +15,13 @@ export async function crearUbicacion({ nombre, tipo, responsable, codigo_qr, act
     if (!res.ok) throw new Error("No se pudo crear ubicacion");
     return res.json();
 }
+
+export async function actualizarUbicacion(id, payload) {
+    const res = await fetch(`${API_URL}/ubicaciones/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("No se pudo actualizar ubicacion");
+    return res.json();
+}

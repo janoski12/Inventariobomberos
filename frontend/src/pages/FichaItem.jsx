@@ -6,6 +6,7 @@ import { listarBomberos } from "../api/bomberos";
 import { listarUbicaciones } from "../api/ubicaciones";
 import Modal from "../components/Modal";
 import { asignarItem, cambiarEstadoItem, moverItem } from "../api/accionesItem";
+import { actualizarItem } from "../api/itemsEdit";
 
 export default function FichaItem() {
   const { id } = useParams();
@@ -22,12 +23,27 @@ export default function FichaItem() {
   const [openMover, setOpenMover] = useState(false);
   const [openEstado, setOpenEstado] = useState(false);
 
-  const [formAsignar, setFormAsignar] = useState({ bombero_id: "", responsable: "", observacion: "" });
-  const [formMover, setFormMover] = useState({ ubicacion_id: "", responsable: "", observacion: "" });
-  const [formEstado, setFormEstado] = useState({ estado: "OPERATIVO", responsable: "", observacion: "" });
+  const [formAsignar, setFormAsignar] = useState({
+    bombero_id: "",
+    responsable: "",
+    observacion: "",
+  });
+  const [formMover, setFormMover] = useState({
+    ubicacion_id: "",
+    responsable: "",
+    observacion: "",
+  });
+  const [formEstado, setFormEstado] = useState({
+    estado: "OPERATIVO",
+    responsable: "",
+    observacion: "",
+  });
 
   const [guardando, setGuardando] = useState(false);
   const [msg, setMsg] = useState("");
+
+  const [openEditDatos, setOpenEditDatos] = useState(false);
+  const [editDatos, setEditDatos] = useState(null);
 
   async function recargarFicha() {
     const [it, ms] = await Promise.all([
@@ -45,7 +61,7 @@ export default function FichaItem() {
       setError("");
       setCargando(true);
 
-      try{
+      try {
         const [it, ms, boms, ubs] = await Promise.all([
           obtenerItem(id),
           obtenerMovimientos(id).catch(() => []),
@@ -55,8 +71,7 @@ export default function FichaItem() {
 
         if (!cancelado) {
           setItem(it);
-          setMovs(ms),
-          setBomberos(boms);
+          (setMovs(ms), setBomberos(boms));
           setUbicaciones(ubs);
         }
       } catch (e) {
@@ -110,14 +125,48 @@ export default function FichaItem() {
 
       {/* BARRA DE ACCIONES */}
       <div className="row">
-        <button className="btn" onClick={() => { setOpenAsignar(true); }}>
+        <button
+          className="btn"
+          onClick={() => {
+            setOpenAsignar(true);
+          }}
+        >
           Asignar a bombero
         </button>
-        <button className="btn" onClick={() => { setOpenMover(true); }}>
+        <button
+          className="btn"
+          onClick={() => {
+            setOpenMover(true);
+          }}
+        >
           Mover a ubicacion
         </button>
-        <button className="btn" onClick={() => { setOpenEstado(true); }}>
+        <button
+          className="btn"
+          onClick={() => {
+            setOpenEstado(true);
+          }}
+        >
           Cambiar Estado
+        </button>
+
+        <button
+          className="btn-light"
+          onClick={() => {
+            setEditDatos({
+              codigo: item.codigo ?? "",
+              categoria: item.categoria ?? "OTRO",
+              subcategoria: item.subcategoria ?? "",
+              descripcion: item.descripcion ?? "",
+              marca: item.marca ?? "",
+              modelo: item.modelo ?? "",
+              serie: item.serie ?? "",
+              criticidad: item.criticidad ?? "MEDIA",
+            });
+            setOpenEditDatos(true);
+          }}
+        >
+          Editar datos
         </button>
       </div>
 
@@ -146,16 +195,11 @@ export default function FichaItem() {
       <h3 style={{ marginTop: 22 }}>Historial de movimientos</h3>
 
       {movs.length === 0 ? (
-        <p className="muted">
-          No hay movimientos registrados para este item.
-        </p>
+        <p className="muted">No hay movimientos registrados para este item.</p>
       ) : (
         <div className="stack">
           {movs.map((m) => (
-            <div
-              key={m.id}
-              className="card"
-            >
+            <div key={m.id} className="card">
               <div className="spread">
                 <div className="card-title">{m.tipo}</div>
                 <div className="muted">{m.fecha}</div>
@@ -184,7 +228,7 @@ export default function FichaItem() {
       {/* MODAL ASIGNAR */}
       <Modal
         open={openAsignar}
-        title= "Asignar a bombero"
+        title="Asignar a bombero"
         onClose={() => setOpenAsignar(false)}
       >
         <div className="stack">
@@ -192,7 +236,9 @@ export default function FichaItem() {
             Bombero
             <select
               value={formAsignar.bombero_id}
-              onChange={(e) => setFormAsignar((p) => ({ ...p, bombero_id: e.target.value }))}
+              onChange={(e) =>
+                setFormAsignar((p) => ({ ...p, bombero_id: e.target.value }))
+              }
               className="input"
             >
               <option value="">-- Selecciona --</option>
@@ -208,7 +254,9 @@ export default function FichaItem() {
             Responsable
             <input
               value={formAsignar.responsable}
-              onChange={(e) => setFormAsignar((p) => ({ ...p, responsable: e.target.value }))}
+              onChange={(e) =>
+                setFormAsignar((p) => ({ ...p, responsable: e.target.value }))
+              }
               className="input"
               placeholder="Ej: Encargado Inventario"
             />
@@ -218,14 +266,18 @@ export default function FichaItem() {
             Observacion
             <input
               value={formAsignar.observacion}
-              onChange={(e) => setFormAsignar((p) => ({ ...p, observacion: e.target.value }))}
+              onChange={(e) =>
+                setFormAsignar((p) => ({ ...p, observacion: e.target.value }))
+              }
               className="input"
               placeholder="Ej: Entega EPP"
             />
           </label>
 
           <div className="row" style={{ justifyContent: "flex-end" }}>
-            <button onClick={() => setOpenAsignar(false)} className="btn-light">Cancelar</button>
+            <button onClick={() => setOpenAsignar(false)} className="btn-light">
+              Cancelar
+            </button>
             <button
               disabled={guardando || !formAsignar.bombero_id}
               className="btn"
@@ -261,11 +313,13 @@ export default function FichaItem() {
         onClose={() => setOpenMover(false)}
       >
         <div className="stack">
-          <label className="label"> 
+          <label className="label">
             Ubicacion
             <select
               value={formMover.ubicacion_id}
-              onChange={(e) => setFormMover((p) => ({ ...p, ubicacion_id: e.target.value }))}
+              onChange={(e) =>
+                setFormMover((p) => ({ ...p, ubicacion_id: e.target.value }))
+              }
               className="input"
             >
               <option value="">-- Seleciona --</option>
@@ -281,7 +335,9 @@ export default function FichaItem() {
             Responsable
             <input
               value={formMover.responsable}
-              onChange={(e) => setFormMover((p) => ({ ...p, responsable: e.target.value }))}
+              onChange={(e) =>
+                setFormMover((p) => ({ ...p, responsable: e.target.value }))
+              }
               className="input"
               placeholder="Ej: Encargado Trauma"
             />
@@ -291,14 +347,18 @@ export default function FichaItem() {
             Observacion
             <input
               value={formMover.observacion}
-              onChange={(e) => setFormMover((p) => ({ ...p, observacion: e.target.value }))}
+              onChange={(e) =>
+                setFormMover((p) => ({ ...p, observacion: e.target.value }))
+              }
               className="input"
               placeholder="Ej: Se almacena en bodega"
             />
           </label>
 
           <div className="row" style={{ justifyContent: "flex-end" }}>
-            <button onClick={() => setOpenMover(false)} className="btn-light">Cancelar</button>
+            <button onClick={() => setOpenMover(false)} className="btn-light">
+              Cancelar
+            </button>
             <button
               className="btn"
               disabled={guardando || !formMover.ubicacion_id}
@@ -327,7 +387,6 @@ export default function FichaItem() {
         </div>
       </Modal>
 
-
       {/* MODAL ESTADO */}
       <Modal
         open={openEstado}
@@ -340,7 +399,9 @@ export default function FichaItem() {
             <select
               className="input"
               value={formEstado.estado}
-              onChange={(e) => setFormEstado((p) => ({ ...p, estado: e.target.value }))}
+              onChange={(e) =>
+                setFormEstado((p) => ({ ...p, estado: e.target.value }))
+              }
             >
               <option value="OPERTATIVO">OPERATIVO</option>
               <option value="MANTENCION">MANTENCION</option>
@@ -354,7 +415,9 @@ export default function FichaItem() {
             <input
               className="input"
               value={formEstado.responsable}
-              onChange={(e) => setFormEstado((p) => ({ ...p, responsable: e.target.value }))}
+              onChange={(e) =>
+                setFormEstado((p) => ({ ...p, responsable: e.target.value }))
+              }
               placeholder="Ej: Encargado Material Menor"
             />
           </label>
@@ -364,13 +427,17 @@ export default function FichaItem() {
             <input
               className="input"
               value={formEstado.observacion}
-              onChange={(e) => setFormEstado((p) => ({ ...p, observacion: e.target.value }))}
+              onChange={(e) =>
+                setFormEstado((p) => ({ ...p, observacion: e.target.value }))
+              }
               placeholder="Ej: Falla detectada en inspeccion"
             />
           </label>
 
           <div className="row" style={{ justifyContent: "flex-end" }}>
-            <button onClick={() => setOpenEstado(false)} className="btn-light">Cancelar</button>
+            <button onClick={() => setOpenEstado(false)} className="btn-light">
+              Cancelar
+            </button>
             <button
               className="btn"
               disabled={guardando}
@@ -397,6 +464,164 @@ export default function FichaItem() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        open={openEditDatos}
+        title="Editar datos del ítem"
+        onClose={() => setOpenEditDatos(false)}
+      >
+        {editDatos ? (
+          <div className="stack">
+            <label className="label">
+              Código
+              <input
+                className="input"
+                value={editDatos.codigo}
+                onChange={(e) =>
+                  setEditDatos((p) => ({ ...p, codigo: e.target.value }))
+                }
+              />
+            </label>
+
+            <label className="label">
+              Categoría
+              <select
+                className="input"
+                value={editDatos.categoria}
+                onChange={(e) =>
+                  setEditDatos((p) => ({ ...p, categoria: e.target.value }))
+                }
+              >
+                <option value="EPP">EPP</option>
+                <option value="TRAUMA">TRAUMA</option>
+                <option value="HERRAMIENTA">HERRAMIENTA</option>
+                <option value="COMUNICACION">COMUNICACION</option>
+                <option value="OTRO">OTRO</option>
+              </select>
+            </label>
+
+            <label className="label">
+              Subcategoría
+              <input
+                className="input"
+                value={editDatos.subcategoria}
+                onChange={(e) =>
+                  setEditDatos((p) => ({ ...p, subcategoria: e.target.value }))
+                }
+              />
+            </label>
+
+            <label className="label">
+              Descripción
+              <input
+                className="input"
+                value={editDatos.descripcion}
+                onChange={(e) =>
+                  setEditDatos((p) => ({ ...p, descripcion: e.target.value }))
+                }
+              />
+            </label>
+
+            <label className="label">
+              Marca
+              <input
+                className="input"
+                value={editDatos.marca}
+                onChange={(e) =>
+                  setEditDatos((p) => ({ ...p, marca: e.target.value }))
+                }
+              />
+            </label>
+
+            <label className="label">
+              Modelo
+              <input
+                className="input"
+                value={editDatos.modelo}
+                onChange={(e) =>
+                  setEditDatos((p) => ({ ...p, modelo: e.target.value }))
+                }
+              />
+            </label>
+
+            <label className="label">
+              Serie
+              <input
+                className="input"
+                value={editDatos.serie}
+                onChange={(e) =>
+                  setEditDatos((p) => ({ ...p, serie: e.target.value }))
+                }
+              />
+            </label>
+
+            <label className="label">
+              Criticidad
+              <select
+                className="input"
+                value={editDatos.criticidad}
+                onChange={(e) =>
+                  setEditDatos((p) => ({ ...p, criticidad: e.target.value }))
+                }
+              >
+                <option value="ALTA">ALTA</option>
+                <option value="MEDIA">MEDIA</option>
+                <option value="BAJA">BAJA</option>
+              </select>
+            </label>
+
+            <div className="row" style={{ justifyContent: "flex-end" }}>
+              <button
+                className="btn-light"
+                onClick={() => setOpenEditDatos(false)}
+              >
+                Cancelar
+              </button>
+
+              <button
+                className="btn"
+                disabled={
+                  guardando ||
+                  !editDatos.codigo.trim() ||
+                  !editDatos.descripcion.trim()
+                }
+                onClick={async () => {
+                  try {
+                    setGuardando(true);
+
+                    await actualizarItem(id, {
+                      codigo: editDatos.codigo.trim(),
+                      categoria: editDatos.categoria,
+                      subcategoria: editDatos.subcategoria.trim() || null,
+                      descripcion: editDatos.descripcion.trim(),
+                      marca: editDatos.marca.trim() || null,
+                      modelo: editDatos.modelo.trim() || null,
+                      serie: editDatos.serie.trim() || null,
+                      criticidad: editDatos.criticidad,
+                    });
+
+                    await recargarFicha();
+                    toast("Datos actualizados");
+                    setOpenEditDatos(false);
+                  } catch (e) {
+                    console.error(e);
+                    alert("No se pudo actualizar el ítem.");
+                  } finally {
+                    setGuardando(false);
+                  }
+                }}
+              >
+                Guardar cambios
+              </button>
+            </div>
+
+            <div className="muted">
+              Nota: asignación, ubicación y estado se gestionan con los botones
+              (para dejar registro en movimientos).
+            </div>
+          </div>
+        ) : null}
       </Modal>
     </div>
   );
