@@ -5,8 +5,9 @@ const fs = require("fs");
 const xlsx = require("xlsx");
 const Database = require("better-sqlite3");
 
-function norm(s) {
-    return String(s ?? "").trim();
+function norm(v) {
+    if (v === undefined || v === null) return "";
+    return String(v).trim();
 }
 
 function die(msg) {
