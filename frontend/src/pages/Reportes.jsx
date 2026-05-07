@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { obtenerReportes } from "../api/reportes";
+import { obtenerReportes, descargarPlantilla } from "../api/reportes";
 
 const CLASE_ESTADO = {
   OPERATIVO: "text-operativo",
@@ -19,6 +19,7 @@ export default function Reportes() {
   const [data, setData] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
+  const [descargando, setDescargando] = useState(false);
 
   useEffect(() => {
     obtenerReportes()
@@ -34,7 +35,25 @@ export default function Reportes() {
 
   return (
     <div className="container">
-      <h2 style={{ marginBottom: 20 }}>Reportes</h2>
+      <div className="spread" style={{ marginBottom: 20 }}>
+        <h2>Reportes</h2>
+        <button
+          className="btn-light"
+          disabled={descargando}
+          onClick={async () => {
+            try {
+              setDescargando(true);
+              await descargarPlantilla();
+            } catch {
+              alert("No se pudo descargar la plantilla. Revisa que el backend esté activo.");
+            } finally {
+              setDescargando(false);
+            }
+          }}
+        >
+          {descargando ? "Descargando..." : "Descargar plantilla Excel"}
+        </button>
+      </div>
 
       {/* ESTADOS */}
       <h3 style={{ marginBottom: 10 }}>Estado del inventario</h3>

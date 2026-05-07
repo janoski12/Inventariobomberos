@@ -557,6 +557,48 @@ app.post("/items/:id/estado", (req, res) => {
     }
 });
 
+// Descargar plantilla de importación Excel
+app.get("/plantilla", (_req, res) => {
+    try {
+        const xlsx = require("xlsx");
+
+        const bomberos = [
+            { nombre: "Juan Pérez",     cargo: "Teniente",   estado: "ACTIVO",   observaciones: "" },
+            { nombre: "María González", cargo: "Voluntario", estado: "ACTIVO",   observaciones: "" },
+        ];
+        const ubicaciones = [
+            { nombre: "Bodega Principal", tipo: "BODEGA",    responsable: "", codigo_qr: "", activo: 1 },
+            { nombre: "Carro 1",          tipo: "CARRO",     responsable: "", codigo_qr: "", activo: 1 },
+            { nombre: "Sala Trauma",      tipo: "SALA",      responsable: "", codigo_qr: "", activo: 1 },
+        ];
+        const items = [
+            { codigo: "EPP-0001", categoria: "EPP",          subcategoria: "Casco",    descripcion: "Casco Estructural",      marca: "Bullard",  modelo: "FH2",    serie: "SN-001", estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "",               bombero_nombre: "Juan Pérez" },
+            { codigo: "TRM-0001", categoria: "TRAUMA",       subcategoria: "Botiquín", descripcion: "Botiquín Trauma Tipo A", marca: "",         modelo: "",       serie: "",        estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "Sala Trauma",    bombero_nombre: "" },
+            { codigo: "HRR-0001", categoria: "HERRAMIENTA",  subcategoria: "Corte",    descripcion: "Amoladora Angular 9\"", marca: "Makita",   modelo: "GA9020", serie: "MK-123",  estado: "MANTENCION",criticidad: "MEDIA", ubicacion_nombre: "Bodega Principal", bombero_nombre: "" },
+            { codigo: "COM-0001", categoria: "COMUNICACION", subcategoria: "Radio",    descripcion: "Radio Portátil VHF",    marca: "Motorola", modelo: "DP4400", serie: "MOT-007", estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "Carro 1",        bombero_nombre: "" },
+        ];
+        const controles = [
+            { codigo_item: "EPP-0001", tipo: "INSPECCION",    fecha_objetivo: "2025-06-01", fecha_real: "",           resultado: "",         observacion: "Inspección anual" },
+            { codigo_item: "HRR-0001", tipo: "MANTENCION",    fecha_objetivo: "2025-04-30", fecha_real: "",           resultado: "",         observacion: "Mantenimiento preventivo" },
+            { codigo_item: "TRM-0001", tipo: "CERTIFICACION", fecha_objetivo: "2025-03-15", fecha_real: "2025-03-14", resultado: "APROBADO", observacion: "" },
+        ];
+
+        const wb = xlsx.utils.book_new();
+        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet(bomberos),   "Bomberos");
+        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet(ubicaciones), "Ubicaciones");
+        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet(items),      "Items");
+        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet(controles),  "Controles");
+
+        const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", 'attachment; filename="plantilla_importacion.xlsx"');
+        res.send(buf);
+    } catch (e) {
+        return serverError(res, e, "Error generando plantilla");
+    }
+});
+
 // Reportes
 app.get("/reportes", (_req, res) => {
     try {
