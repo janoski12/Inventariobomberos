@@ -1,27 +1,31 @@
 import { API_URL } from "./config";
 
-export async function listarUbicaciones() {
-    const res = await fetch(`${API_URL}/ubicaciones`);
-    if (!res.ok) throw new Error("No se pudieron cargar ubicaciones");
-    return res.json();
+async function request(url, options) {
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error ?? `Error ${res.status}`);
+  }
+  return res.json();
 }
 
-export async function crearUbicacion({ nombre, tipo, responsable, codigo_qr, activo }) {
-    const res = await fetch(`${API_URL}/ubicaciones`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json"},
-        body: JSON.stringify({ nombre, tipo, responsable, codigo_qr, activo }),
-    });
-    if (!res.ok) throw new Error("No se pudo crear ubicacion");
-    return res.json();
+const json = (payload) => ({
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(payload),
+});
+
+export function listarUbicaciones() {
+  return request(`${API_URL}/ubicaciones`);
 }
 
-export async function actualizarUbicacion(id, payload) {
-    const res = await fetch(`${API_URL}/ubicaciones/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-    });
-    if (!res.ok) throw new Error("No se pudo actualizar ubicacion");
-    return res.json();
+export function crearUbicacion(payload) {
+  return request(`${API_URL}/ubicaciones`, { method: "POST", ...json(payload) });
+}
+
+export function actualizarUbicacion(id, payload) {
+  return request(`${API_URL}/ubicaciones/${id}`, { method: "PUT", ...json(payload) });
+}
+
+export function eliminarUbicacion(id) {
+  return request(`${API_URL}/ubicaciones/${id}`, { method: "DELETE" });
 }

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { obtenerItem, obtenerMovimientos, asignarItem, cambiarEstadoItem, moverItem, actualizarItem } from "../api/items";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { obtenerItem, obtenerMovimientos, asignarItem, cambiarEstadoItem, moverItem, actualizarItem, eliminarItem } from "../api/items";
 import { listarBomberos } from "../api/bomberos";
 import { listarUbicaciones } from "../api/ubicaciones";
 import Modal from "../components/Modal";
@@ -9,6 +9,7 @@ import { obtenerControles, crearControl, completarControl } from "../api/control
 
 export default function FichaItem() {
   const { id } = useParams();
+  const navigate = useNavigate();
 
   const [item, setItem] = useState(null);
   const [movs, setMovs] = useState([]);
@@ -159,6 +160,21 @@ export default function FichaItem() {
           }}
         >
           Cambiar Estado
+        </button>
+
+        <button
+          className="btn-danger"
+          onClick={async () => {
+            if (!window.confirm(`¿Eliminar "${item.codigo} - ${item.descripcion}"? Se borrarán también sus movimientos y controles. Esta acción no se puede deshacer.`)) return;
+            try {
+              await eliminarItem(id);
+              navigate("/");
+            } catch (e) {
+              alert(e.message);
+            }
+          }}
+        >
+          Eliminar ítem
         </button>
 
         <button

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { actualizarBombero, crearBombero, listarBomberos } from "../api/bomberos";
+import { actualizarBombero, crearBombero, eliminarBombero, listarBomberos } from "../api/bomberos";
 import Modal from "../components/Modal";
 
 export default function Bomberos() {
@@ -139,21 +139,41 @@ export default function Bomberos() {
                 </div>
               </div>
 
-              <button
-                className="btn-light"
-                onClick={() => {
-                  setEdit({
-                    id: b.id,
-                    nombre: b.nombre ?? "",
-                    cargo: b.cargo ?? "",
-                    estado: b.estado ?? "ACTIVO",
-                    observaciones: b.observaciones ?? "",
-                  });
-                  setOpenEdit(true);
-                }}
-              >
-                Editar
-              </button>
+              <div className="row">
+                <button
+                  className="btn-light"
+                  onClick={() => {
+                    setEdit({
+                      id: b.id,
+                      nombre: b.nombre ?? "",
+                      cargo: b.cargo ?? "",
+                      estado: b.estado ?? "ACTIVO",
+                      observaciones: b.observaciones ?? "",
+                    });
+                    setOpenEdit(true);
+                  }}
+                >
+                  Editar
+                </button>
+                <button
+                  className="btn-danger"
+                  disabled={guardando}
+                  onClick={async () => {
+                    if (!window.confirm(`¿Eliminar a ${b.nombre}? Esta acción no se puede deshacer.`)) return;
+                    try {
+                      setGuardando(true);
+                      await eliminarBombero(b.id);
+                      await cargar();
+                    } catch (e) {
+                      alert(e.message);
+                    } finally {
+                      setGuardando(false);
+                    }
+                  }}
+                >
+                  Eliminar
+                </button>
+              </div>
             </div>
           </div>
         ))}

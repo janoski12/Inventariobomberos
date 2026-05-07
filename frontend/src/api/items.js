@@ -51,3 +51,7 @@ export function moverItem(id, payload) {
 export function cambiarEstadoItem(id, payload) {
   return request(`${API_URL}/items/${id}/estado`, { method: "POST", ...json(payload) });
 }
+
+export function eliminarItem(id) {
+  return request(`${API_URL}/items/${id}`, { method: "DELETE" });
+}

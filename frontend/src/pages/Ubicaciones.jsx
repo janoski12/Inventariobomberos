@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { actualizarUbicacion, crearUbicacion, listarUbicaciones } from "../api/ubicaciones";
+import { actualizarUbicacion, crearUbicacion, eliminarUbicacion, listarUbicaciones } from "../api/ubicaciones";
 import Modal from "../components/Modal";
 
 export default function Ubicaciones() {
@@ -173,22 +173,42 @@ export default function Ubicaciones() {
                 </div>
               </div>
 
-              <button
-                className="btn-light"
-                onClick={() => {
-                  setEdit({
-                    id: u.id,
-                    nombre: u.nombre ?? "",
-                    tipo: u.tipo ?? "BODEGA",
-                    responsable: u.responsable ?? "",
-                    codigo_qr: u.codigo_qr ?? "",
-                    activo: u.activo ? 1 : 0,
-                  });
-                  setOpenEdit(true);
-                }}
-              >
-                Editar
-              </button>
+              <div className="row">
+                <button
+                  className="btn-light"
+                  onClick={() => {
+                    setEdit({
+                      id: u.id,
+                      nombre: u.nombre ?? "",
+                      tipo: u.tipo ?? "BODEGA",
+                      responsable: u.responsable ?? "",
+                      codigo_qr: u.codigo_qr ?? "",
+                      activo: u.activo ? 1 : 0,
+                    });
+                    setOpenEdit(true);
+                  }}
+                >
+                  Editar
+                </button>
+                <button
+                  className="btn-danger"
+                  disabled={guardando}
+                  onClick={async () => {
+                    if (!window.confirm(`¿Eliminar "${u.nombre}"? Esta acción no se puede deshacer.`)) return;
+                    try {
+                      setGuardando(true);
+                      await eliminarUbicacion(u.id);
+                      await cargar();
+                    } catch (e) {
+                      alert(e.message);
+                    } finally {
+                      setGuardando(false);
+                    }
+                  }}
+                >
+                  Eliminar
+                </button>
+              </div>
             </div>
           </div>
         ))}

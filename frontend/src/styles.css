@@ -58,6 +58,17 @@ h1, h2, h3 { margin: 0;}
 }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 
+.btn-danger {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid #b00020;
+    background: transparent;
+    color: #b00020;
+    cursor: pointer;
+}
+.btn-danger:hover { background: #b00020; color: #fff; }
+.btn-danger:disabled { opacity: .5; cursor: not-allowed; }
+
 .btn-light{
     padding: 10px 12px;
     border-radius: 10px;

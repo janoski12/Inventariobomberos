@@ -1,3 +1,4 @@
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const db = require("./db");
@@ -612,6 +613,73 @@ app.get("/reportes", (_req, res) => {
         });
     } catch (e) {
         return serverError(res, e, "Error generando reportes");
+    }
+});
+
+// Eliminar item (cascada: controles y movimientos)
+app.delete("/items/:id", (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) return badRequest(res, "ID inválido");
+
+        const item = db.prepare("SELECT id FROM item WHERE id=?").get(id);
+        if (!item) return notFound(res, "Item no encontrado");
+
+        db.transaction(() => {
+            db.prepare("DELETE FROM control   WHERE item_id=?").run(id);
+            db.prepare("DELETE FROM movimiento WHERE item_id=?").run(id);
+            db.prepare("DELETE FROM item       WHERE id=?").run(id);
+        })();
+
+        res.json({ ok: true });
+    } catch (e) {
+        return serverError(res, e, "Error eliminando item");
+    }
+});
+
+// Eliminar bombero (bloqueado si tiene items asignados)
+app.delete("/bomberos/:id", (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) return badRequest(res, "ID inválido");
+
+        const bombero = db.prepare("SELECT id FROM bombero WHERE id=?").get(id);
+        if (!bombero) return notFound(res, "Bombero no encontrado");
+
+        const asignados = db.prepare("SELECT COUNT(*) AS total FROM item WHERE asignado_bombero_id=?").get(id);
+        if (asignados.total > 0) {
+            return res.status(409).json({
+                error: `No se puede eliminar: tiene ${asignados.total} ítem(s) asignado(s). Reasígnalos primero.`,
+            });
+        }
+
+        db.prepare("DELETE FROM bombero WHERE id=?").run(id);
+        res.json({ ok: true });
+    } catch (e) {
+        return serverError(res, e, "Error eliminando bombero");
+    }
+});
+
+// Eliminar ubicacion (bloqueada si tiene items)
+app.delete("/ubicaciones/:id", (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) return badRequest(res, "ID inválido");
+
+        const ubicacion = db.prepare("SELECT id FROM ubicacion WHERE id=?").get(id);
+        if (!ubicacion) return notFound(res, "Ubicacion no encontrada");
+
+        const conItems = db.prepare("SELECT COUNT(*) AS total FROM item WHERE ubicacion_actual_id=?").get(id);
+        if (conItems.total > 0) {
+            return res.status(409).json({
+                error: `No se puede eliminar: tiene ${conItems.total} ítem(s) en esta ubicación. Muévelos primero.`,
+            });
+        }
+
+        db.prepare("DELETE FROM ubicacion WHERE id=?").run(id);
+        res.json({ ok: true });
+    } catch (e) {
+        return serverError(res, e, "Error eliminando ubicacion");
     }
 });
 
