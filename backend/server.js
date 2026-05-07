@@ -1,7 +1,10 @@
 require("dotenv").config();
 const express = require("express");
-const cors = require("cors");
-const db = require("./db");
+const cors    = require("cors");
+const multer  = require("multer");
+const db      = require("./db");
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const ESTADOS_ITEM    = ["OPERATIVO", "MANTENCION", "FUERA_SERVICIO", "BAJA"];
 const CRITICIDADES    = ["BAJA", "MEDIA", "ALTA"];
@@ -554,6 +557,127 @@ app.post("/items/:id/estado", (req, res) => {
         res.json({ ok: true });
     } catch (e) {
         return serverError(res, e, "Error cambiando estado del item");
+    }
+});
+
+// Importar desde Excel
+app.post("/importar", upload.single("archivo"), (req, res) => {
+    if (!req.file) return badRequest(res, "No se recibió ningún archivo");
+
+    const ext = req.file.originalname.split(".").pop().toLowerCase();
+    if (ext !== "xlsx" && ext !== "xls") return badRequest(res, "El archivo debe ser .xlsx o .xls");
+
+    try {
+        const xlsx = require("xlsx");
+        const wb   = xlsx.read(req.file.buffer, { type: "buffer" });
+
+        function readSheet(name) {
+            const ws = wb.Sheets[name];
+            if (!ws) throw new Error(`No existe la hoja "${name}" en el archivo`);
+            return xlsx.utils.sheet_to_json(ws, { defval: "" });
+        }
+
+        function norm(v) {
+            if (v === undefined || v === null) return "";
+            return String(v).trim();
+        }
+
+        const bomberos   = readSheet("Bomberos");
+        const ubicaciones = readSheet("Ubicaciones");
+        const items      = readSheet("Items");
+        const controles  = readSheet("Controles");
+
+        // Validaciones de unicidad
+        const uNames = new Set();
+        for (const u of ubicaciones) {
+            const n = norm(u.nombre); if (!n) continue;
+            if (uNames.has(n)) return badRequest(res, `Ubicación duplicada: "${n}"`);
+            uNames.add(n);
+        }
+        const bNames = new Set();
+        for (const b of bomberos) {
+            const n = norm(b.nombre); if (!n) continue;
+            if (bNames.has(n)) return badRequest(res, `Bombero duplicado: "${n}"`);
+            bNames.add(n);
+        }
+        const codes = new Set();
+        for (const it of items) {
+            const c = norm(it.codigo); if (!c) continue;
+            if (codes.has(c)) return badRequest(res, `Código de ítem duplicado: "${c}"`);
+            codes.add(c);
+        }
+
+        const insUbicacion = db.prepare(`INSERT INTO ubicacion (nombre, tipo, responsable, codigo_qr, activo) VALUES (?, ?, ?, ?, ?)`);
+        const insBombero   = db.prepare(`INSERT INTO bombero (nombre, cargo, estado, observaciones) VALUES (?, ?, ?, ?)`);
+        const insItem      = db.prepare(`INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        const insControl   = db.prepare(`INSERT INTO control (item_id, tipo, fecha_objetivo, fecha_real, resultado, observacion) VALUES (?, ?, ?, ?, ?, ?)`);
+        const insMov       = db.prepare(`INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`);
+
+        db.transaction(() => {
+            db.prepare("DELETE FROM movimiento").run();
+            db.prepare("DELETE FROM control").run();
+            db.prepare("DELETE FROM item").run();
+            db.prepare("DELETE FROM bombero").run();
+            db.prepare("DELETE FROM ubicacion").run();
+
+            for (const u of ubicaciones) {
+                const nombre = norm(u.nombre); if (!nombre) continue;
+                const tipo   = TIPOS_UBICACION.includes(norm(u.tipo).toUpperCase()) ? norm(u.tipo).toUpperCase() : "OTRO";
+                insUbicacion.run(nombre, tipo, norm(u.responsable) || null, norm(u.codigo_qr) || null, norm(u.activo) === "0" ? 0 : 1);
+            }
+
+            const ubicMap = new Map();
+            for (const r of db.prepare("SELECT id, nombre FROM ubicacion").all()) ubicMap.set(r.nombre, r.id);
+
+            for (const b of bomberos) {
+                const nombre = norm(b.nombre); if (!nombre) continue;
+                insBombero.run(nombre, norm(b.cargo) || null, norm(b.estado).toUpperCase() || "ACTIVO", norm(b.observaciones) || null);
+            }
+
+            const bomMap = new Map();
+            for (const r of db.prepare("SELECT id, nombre FROM bombero").all()) bomMap.set(r.nombre, r.id);
+
+            for (const it of items) {
+                const codigo = norm(it.codigo); if (!codigo) continue;
+                const categoria  = CATEGORIAS.includes(norm(it.categoria).toUpperCase()) ? norm(it.categoria).toUpperCase() : "OTRO";
+                const estado     = ESTADOS_ITEM.includes(norm(it.estado).toUpperCase())  ? norm(it.estado).toUpperCase()    : "OPERATIVO";
+                const criticidad = CRITICIDADES.includes(norm(it.criticidad).toUpperCase()) ? norm(it.criticidad).toUpperCase() : "MEDIA";
+                const ubicNombre = norm(it.ubicacion_nombre);
+                const bomNombre  = norm(it.bombero_nombre);
+                if (ubicNombre && bomNombre) throw new Error(`Ítem "${codigo}": no puede tener ubicación y bombero simultáneamente`);
+                const ubicId = ubicNombre ? ubicMap.get(ubicNombre) ?? (() => { throw new Error(`Ítem "${codigo}": ubicación no encontrada "${ubicNombre}"`); })() : null;
+                const bomId  = bomNombre  ? bomMap.get(bomNombre)   ?? (() => { throw new Error(`Ítem "${codigo}": bombero no encontrado "${bomNombre}"`);   })() : null;
+                insItem.run(codigo, categoria, norm(it.subcategoria) || null, norm(it.descripcion) || codigo, norm(it.marca) || null, norm(it.modelo) || null, norm(it.serie) || null, estado, criticidad, ubicId, bomId);
+            }
+
+            const itemMap = new Map();
+            for (const r of db.prepare("SELECT id, codigo FROM item").all()) itemMap.set(r.codigo, r.id);
+
+            for (const c of controles) {
+                const codigo_item = norm(c.codigo_item); if (!codigo_item) continue;
+                const itemId = itemMap.get(codigo_item);
+                if (!itemId) throw new Error(`Control referencia ítem inexistente: "${codigo_item}"`);
+                const tipo = TIPOS_CONTROL.includes(norm(c.tipo).toUpperCase()) ? norm(c.tipo).toUpperCase() : "INSPECCION";
+                insControl.run(itemId, tipo, norm(c.fecha_objetivo) || null, norm(c.fecha_real) || null, norm(c.resultado) || null, norm(c.observacion) || null);
+            }
+
+            for (const r of db.prepare(`SELECT it.id, u.nombre AS ubic, b.nombre AS bom FROM item it LEFT JOIN ubicacion u ON u.id = it.ubicacion_actual_id LEFT JOIN bombero b ON b.id = it.asignado_bombero_id`).all()) {
+                const hacia = r.bom ? `Asignado a ${r.bom}` : r.ubic ? `Ubicado en ${r.ubic}` : "Sin ubicación";
+                insMov.run(r.id, "ALTA", "Carga inicial", hacia, "Sistema", "Importación desde Excel");
+            }
+        })();
+
+        res.json({
+            ok: true,
+            resumen: {
+                bomberos:   bomberos.filter(b => norm(b.nombre)).length,
+                ubicaciones: ubicaciones.filter(u => norm(u.nombre)).length,
+                items:       items.filter(i => norm(i.codigo)).length,
+                controles:   controles.filter(c => norm(c.codigo_item)).length,
+            },
+        });
+    } catch (e) {
+        return res.status(400).json({ error: String(e.message ?? e) });
     }
 });
 

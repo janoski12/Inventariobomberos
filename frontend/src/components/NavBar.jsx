@@ -1,13 +1,15 @@
-import { Link } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 
 export default function NavBar() {
-    return(
-        <div className="row" style={{ marginBottom: 14 }}>
-            <Link to="/" className="btn" style={{textDecoration: "none" }}>Buscar</Link>
-            <Link to="/items/nuevo" className="btn" style={{textDecoration: "none" }}>Nuevo Item</Link>
-            <Link to="/bomberos" className="btn" style={{textDecoration: "none" }}>Bomberos</Link>
-            <Link to="/ubicaciones" className="btn" style={{textDecoration: "none" }}>Ubicaciones</Link>
-            <Link to="/reportes" className="btn" style={{textDecoration: "none" }}>Reportes</Link>
+    const cls = ({ isActive }) => "nav-link" + (isActive ? " nav-link--active" : "");
+    return (
+        <div className="navbar">
+            <NavLink to="/" end className={cls}>Inventario</NavLink>
+            <NavLink to="/items/nuevo" className={cls}>Nuevo Ítem</NavLink>
+            <NavLink to="/bomberos" className={cls}>Bomberos</NavLink>
+            <NavLink to="/ubicaciones" className={cls}>Ubicaciones</NavLink>
+            <NavLink to="/reportes" className={cls}>Reportes</NavLink>
+            <NavLink to="/importar" className={cls}>Importar</NavLink>
         </div>
     );
 }

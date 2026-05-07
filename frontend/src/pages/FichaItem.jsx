@@ -120,7 +120,7 @@ export default function FichaItem() {
         <Link to="/" style={{ textDecoration: "none" }}>
           Volver
         </Link>
-        <p style={{ color: "#b00020" }}>{error || "Item no encontrado"}</p>
+        <p className="error">{error || "Item no encontrado"}</p>
       </div>
     );
   }
@@ -231,21 +231,11 @@ export default function FichaItem() {
                 <div className="card-title">{m.tipo}</div>
                 <div className="muted">{m.fecha}</div>
               </div>
-              <div style={{ marginTop: 6, fontSize: 13, color: "#444" }}>
-                <div>
-                  <b>Desde:</b> {m.desde ?? "-"}
-                </div>
-                <div>
-                  <b>Hacia:</b> {m.hacia ?? "-"}
-                </div>
-                <div>
-                  <b>Responsable:</b> {m.responsable ?? "-"}
-                </div>
-                {m.observacion ? (
-                  <div>
-                    <b>Obs:</b> {m.observacion}
-                  </div>
-                ) : null}
+              <div className="card-detail">
+                <div><b>Desde:</b> {m.desde ?? "-"}</div>
+                <div><b>Hacia:</b> {m.hacia ?? "-"}</div>
+                <div><b>Responsable:</b> {m.responsable ?? "-"}</div>
+                {m.observacion ? <div><b>Obs:</b> {m.observacion}</div> : null}
               </div>
             </div>
           ))}
@@ -270,18 +260,18 @@ export default function FichaItem() {
           {controles.map((c) => {
             const vencido = !c.fecha_real && c.fecha_objetivo < new Date().toISOString().slice(0, 10);
             return (
-              <div key={c.id} className="card" style={vencido ? { borderLeft: "3px solid #b00020" } : {}}>
+              <div key={c.id} className={`card${vencido ? " card--vencido" : ""}`}>
                 <div className="spread">
                   <div className="card-title">{c.tipo}</div>
                   <div className="muted">
                     {c.fecha_objetivo}
-                    {vencido && <span style={{ color: "#b00020", marginLeft: 8, fontWeight: 600 }}>VENCIDO</span>}
+                    {vencido && <span className="badge-vencido">VENCIDO</span>}
                   </div>
                 </div>
-                <div style={{ marginTop: 6, fontSize: 13, color: "#444" }}>
+                <div className="card-detail">
                   <div>
                     <b>Resultado:</b>{" "}
-                    <span style={{ color: c.resultado === "APROBADO" ? "#2a7a2a" : c.resultado === "RECHAZADO" ? "#b00020" : "#888" }}>
+                    <span className={c.resultado === "APROBADO" ? "resultado-aprobado" : c.resultado === "RECHAZADO" ? "resultado-rechazado" : "resultado-pendiente"}>
                       {c.resultado ?? "PENDIENTE"}
                     </span>
                   </div>

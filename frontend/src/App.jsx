@@ -6,25 +6,29 @@ import NuevoItem from "./pages/NuevoItem";
 import Bomberos from "./pages/Bomberos";
 import Ubicaciones from "./pages/Ubicaciones";
 import Reportes from "./pages/Reportes";
+import Importar from "./pages/Importar";
 
 function App() {
   return (
     <BrowserRouter>
-      <div style={{ padding: 20 }}>
-        <h1 style={{ marginTop: 0 }}>Inventario Bomberos</h1>
-        <NavBar />
-
+      <header className="app-header">
+        <span className="app-header-badge">CBT10</span>
+        <span className="app-header-title">Inventario Bomberos</span>
+      </header>
+      <NavBar />
+      <main className="app-content">
         <Routes>
           <Route path="/" element={<BusquedaItems />} />
-          <Route path="/items/:id" element={<FichaItem />} />
           <Route path="/items/nuevo" element={<NuevoItem />} />
+          <Route path="/items/:id" element={<FichaItem />} />
           <Route path="/bomberos" element={<Bomberos />} />
           <Route path="/ubicaciones" element={<Ubicaciones />} />
           <Route path="/reportes" element={<Reportes />} />
+          <Route path="/importar" element={<Importar />} />
         </Routes>
-      </div>
+      </main>
     </BrowserRouter>
-  )
+  );
 }
 
 export default App;
