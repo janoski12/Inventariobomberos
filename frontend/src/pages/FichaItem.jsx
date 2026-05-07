@@ -1,12 +1,11 @@
 import { useEffect } from "react";
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { obtenerItem, obtenerMovimientos } from "../api/itemDetalle";
+import { obtenerItem, obtenerMovimientos, asignarItem, cambiarEstadoItem, moverItem, actualizarItem } from "../api/items";
 import { listarBomberos } from "../api/bomberos";
 import { listarUbicaciones } from "../api/ubicaciones";
 import Modal from "../components/Modal";
-import { asignarItem, cambiarEstadoItem, moverItem } from "../api/accionesItem";
-import { actualizarItem } from "../api/itemsEdit";
+import { obtenerControles, crearControl, completarControl } from "../api/controles";
 
 export default function FichaItem() {
   const { id } = useParams();
@@ -45,13 +44,22 @@ export default function FichaItem() {
   const [openEditDatos, setOpenEditDatos] = useState(false);
   const [editDatos, setEditDatos] = useState(null);
 
+  const [controles, setControles] = useState([]);
+  const [openNuevoControl, setOpenNuevoControl] = useState(false);
+  const [openCompletarControl, setOpenCompletarControl] = useState(false);
+  const [controlSeleccionado, setControlSeleccionado] = useState(null);
+  const [formControl, setFormControl] = useState({ tipo: "INSPECCION", fecha_objetivo: "", observacion: "" });
+  const [formCompletar, setFormCompletar] = useState({ fecha_real: "", resultado: "APROBADO", observacion: "" });
+
   async function recargarFicha() {
-    const [it, ms] = await Promise.all([
+    const [it, ms, cs] = await Promise.all([
       obtenerItem(id),
       obtenerMovimientos(id).catch(() => []),
+      obtenerControles(id).catch(() => []),
     ]);
     setItem(it);
     setMovs(ms);
+    setControles(cs);
   }
 
   useEffect(() => {
@@ -62,17 +70,20 @@ export default function FichaItem() {
       setCargando(true);
 
       try {
-        const [it, ms, boms, ubs] = await Promise.all([
+        const [it, ms, boms, ubs, cs] = await Promise.all([
           obtenerItem(id),
           obtenerMovimientos(id).catch(() => []),
           listarBomberos().catch(() => []),
           listarUbicaciones().catch(() => []),
+          obtenerControles(id).catch(() => []),
         ]);
 
         if (!cancelado) {
           setItem(it);
-          (setMovs(ms), setBomberos(boms));
+          setMovs(ms);
+          setBomberos(boms);
           setUbicaciones(ubs);
+          setControles(cs);
         }
       } catch (e) {
         console.error(e);
@@ -224,6 +235,165 @@ export default function FichaItem() {
           ))}
         </div>
       )}
+
+      {/* SECCIÓN CONTROLES */}
+      <div className="spread" style={{ marginTop: 22 }}>
+        <h3>Controles / Revisiones</h3>
+        <button className="btn" onClick={() => {
+          setFormControl({ tipo: "INSPECCION", fecha_objetivo: "", observacion: "" });
+          setOpenNuevoControl(true);
+        }}>
+          + Agregar control
+        </button>
+      </div>
+
+      {controles.length === 0 ? (
+        <p className="muted">No hay controles registrados para este item.</p>
+      ) : (
+        <div className="stack">
+          {controles.map((c) => {
+            const vencido = !c.fecha_real && c.fecha_objetivo < new Date().toISOString().slice(0, 10);
+            return (
+              <div key={c.id} className="card" style={vencido ? { borderLeft: "3px solid #b00020" } : {}}>
+                <div className="spread">
+                  <div className="card-title">{c.tipo}</div>
+                  <div className="muted">
+                    {c.fecha_objetivo}
+                    {vencido && <span style={{ color: "#b00020", marginLeft: 8, fontWeight: 600 }}>VENCIDO</span>}
+                  </div>
+                </div>
+                <div style={{ marginTop: 6, fontSize: 13, color: "#444" }}>
+                  <div>
+                    <b>Resultado:</b>{" "}
+                    <span style={{ color: c.resultado === "APROBADO" ? "#2a7a2a" : c.resultado === "RECHAZADO" ? "#b00020" : "#888" }}>
+                      {c.resultado ?? "PENDIENTE"}
+                    </span>
+                  </div>
+                  {c.fecha_real && <div><b>Realizado:</b> {c.fecha_real}</div>}
+                  {c.observacion && <div><b>Obs:</b> {c.observacion}</div>}
+                </div>
+                {!c.fecha_real && (
+                  <div style={{ marginTop: 8 }}>
+                    <button className="btn-light" onClick={() => {
+                      setControlSeleccionado(c);
+                      setFormCompletar({ fecha_real: "", resultado: "APROBADO", observacion: c.observacion ?? "" });
+                      setOpenCompletarControl(true);
+                    }}>
+                      Registrar resultado
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* MODAL NUEVO CONTROL */}
+      <Modal open={openNuevoControl} title="Agregar control" onClose={() => setOpenNuevoControl(false)}>
+        <div className="stack">
+          <label className="label">
+            Tipo
+            <select className="input" value={formControl.tipo}
+              onChange={(e) => setFormControl((p) => ({ ...p, tipo: e.target.value }))}>
+              <option value="INSPECCION">INSPECCION</option>
+              <option value="MANTENCION">MANTENCION</option>
+              <option value="CERTIFICACION">CERTIFICACION</option>
+              <option value="OTRO">OTRO</option>
+            </select>
+          </label>
+          <label className="label">
+            Fecha objetivo
+            <input type="date" className="input" value={formControl.fecha_objetivo}
+              onChange={(e) => setFormControl((p) => ({ ...p, fecha_objetivo: e.target.value }))} />
+          </label>
+          <label className="label">
+            Observación
+            <input className="input" value={formControl.observacion}
+              onChange={(e) => setFormControl((p) => ({ ...p, observacion: e.target.value }))}
+              placeholder="Ej: Revisión anual EPP" />
+          </label>
+          <div className="row" style={{ justifyContent: "flex-end" }}>
+            <button className="btn-light" onClick={() => setOpenNuevoControl(false)}>Cancelar</button>
+            <button className="btn" disabled={guardando || !formControl.fecha_objetivo}
+              onClick={async () => {
+                try {
+                  setGuardando(true);
+                  await crearControl(id, {
+                    tipo: formControl.tipo,
+                    fecha_objetivo: formControl.fecha_objetivo,
+                    observacion: formControl.observacion || null,
+                  });
+                  await recargarFicha();
+                  toast("Control agregado");
+                  setOpenNuevoControl(false);
+                } catch (e) {
+                  console.error(e);
+                  alert("No se pudo agregar el control.");
+                } finally {
+                  setGuardando(false);
+                }
+              }}>
+              Guardar
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* MODAL COMPLETAR CONTROL */}
+      <Modal open={openCompletarControl} title="Registrar resultado" onClose={() => setOpenCompletarControl(false)}>
+        <div className="stack">
+          {controlSeleccionado && (
+            <div className="muted" style={{ fontSize: 13 }}>
+              {controlSeleccionado.tipo} — Fecha objetivo: {controlSeleccionado.fecha_objetivo}
+            </div>
+          )}
+          <label className="label">
+            Fecha realizado
+            <input type="date" className="input" value={formCompletar.fecha_real}
+              onChange={(e) => setFormCompletar((p) => ({ ...p, fecha_real: e.target.value }))} />
+          </label>
+          <label className="label">
+            Resultado
+            <select className="input" value={formCompletar.resultado}
+              onChange={(e) => setFormCompletar((p) => ({ ...p, resultado: e.target.value }))}>
+              <option value="APROBADO">APROBADO</option>
+              <option value="RECHAZADO">RECHAZADO</option>
+              <option value="PENDIENTE">PENDIENTE</option>
+            </select>
+          </label>
+          <label className="label">
+            Observación
+            <input className="input" value={formCompletar.observacion}
+              onChange={(e) => setFormCompletar((p) => ({ ...p, observacion: e.target.value }))}
+              placeholder="Ej: Sin observaciones" />
+          </label>
+          <div className="row" style={{ justifyContent: "flex-end" }}>
+            <button className="btn-light" onClick={() => setOpenCompletarControl(false)}>Cancelar</button>
+            <button className="btn" disabled={guardando || !formCompletar.fecha_real}
+              onClick={async () => {
+                try {
+                  setGuardando(true);
+                  await completarControl(controlSeleccionado.id, {
+                    fecha_real: formCompletar.fecha_real,
+                    resultado: formCompletar.resultado,
+                    observacion: formCompletar.observacion || null,
+                  });
+                  await recargarFicha();
+                  toast("Resultado registrado");
+                  setOpenCompletarControl(false);
+                } catch (e) {
+                  console.error(e);
+                  alert("No se pudo registrar el resultado.");
+                } finally {
+                  setGuardando(false);
+                }
+              }}>
+              Guardar
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* MODAL ASIGNAR */}
       <Modal
@@ -403,7 +573,7 @@ export default function FichaItem() {
                 setFormEstado((p) => ({ ...p, estado: e.target.value }))
               }
             >
-              <option value="OPERTATIVO">OPERATIVO</option>
+              <option value="OPERATIVO">OPERATIVO</option>
               <option value="MANTENCION">MANTENCION</option>
               <option value="FUERA_SERVICIO">FUERA_SERVICIO</option>
               <option value="BAJA">BAJA</option>

@@ -159,3 +159,57 @@ h1, h2, h3 { margin: 0;}
 .modal-close:hover { filter: brightness(0.97); }
 
 .modal-body { margin-top: 12px;}
+
+/* Filtros */
+.filtros { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.filtro-select {
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid #2a2a2a;
+    background: #1a1a1a;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+}
+.filtro-select option { background: #1a1a1a; }
+.filtro-activo { border-color: #7aa7ff; color: #7aa7ff; }
+.btn-clear-filtros {
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid #444;
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    cursor: pointer;
+}
+.btn-clear-filtros:hover { border-color: #888; color: var(--text); }
+
+/* Reportes */
+.reporte-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+.stat-number { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+.stat-label   { font-size: 13px; color: #444; }
+
+.text-operativo    { color: #2a7a2a; font-weight: 600; }
+.text-mantencion   { color: #c87800; font-weight: 600; }
+.text-fuera-servicio { color: #b00020; font-weight: 600; }
+.text-baja-estado  { color: #888;    font-weight: 600; }
+.text-total        { color: #222;    font-weight: 600; }
+
+.text-alta     { color: #b00020; font-weight: 600; }
+.text-media    { color: #c87800; font-weight: 600; }
+.text-baja-crit { color: #2a7a2a; font-weight: 600; }
+
+.card--vencido { border-left: 3px solid #b00020; }
+.card--proximo { border-left: 3px solid #c87800; }
+
+.badge-danger  { color: #b00020; font-weight: 600; font-size: 14px; }
+.badge-warning { color: #c87800; font-weight: 600; font-size: 14px; }
+.badge-neutral { color: #888;    font-weight: 600; font-size: 14px; }
+
+.item-code { font-weight: 700; color: #111; }
+.item-desc { color: #444; font-size: 13px; margin-left: 8px; }
+.item-tipo { font-size: 13px; color: #666; margin-top: 4px; }
+.item-fecha-danger  { font-size: 13px; color: #b00020; font-weight: 600; }
+.item-fecha-warning { font-size: 13px; color: #c87800; font-weight: 600; }

@@ -2,8 +2,9 @@ const express = require("express");
 const cors = require("cors");
 const db = require("./db");
 
-const ESTADOS_ITEM = ["OPERATIVO", "MANTENCION", "FUERA_SERVICIO", "BAJA"];
-const CRITICIDADES = ["BAJA", "MEDIA", "ALTA"];
+const ESTADOS_ITEM    = ["OPERATIVO", "MANTENCION", "FUERA_SERVICIO", "BAJA"];
+const CRITICIDADES    = ["BAJA", "MEDIA", "ALTA"];
+const CATEGORIAS      = ["EPP", "TRAUMA", "HERRAMIENTA", "COMUNICACION", "OTRO"];
 const ESTADOS_BOMBERO = ["ACTIVO", "INACTIVO"];
 const TIPOS_UBICACION = ["BODEGA", "SALA", "SALON", "CONTAINER", "CARRO", "CASILLERO", "OTRO"];
 
@@ -219,43 +220,57 @@ app.post("/items", (req, res) => {
         if (!ESTADOS_ITEM.includes(estado)) {
             return badRequest(res, `estado inválido. Use: ${ESTADOS_ITEM.join(", ")}`);
         }
-
+        if (!CATEGORIAS.includes(categoria)) {
+            return badRequest(res, `categoria inválida. Use: ${CATEGORIAS.join(", ")}`);
+        }
         if (!CRITICIDADES.includes(criticidad)) {
             return badRequest(res, `criticidad inválida. Use: ${CRITICIDADES.join(", ")}`);
         }
 
+        if (!isNil(req.body.ubicacion_actual_id) && (!Number.isInteger(ubicacion_actual_id) || ubicacion_actual_id <= 0)) {
+            return badRequest(res, "ubicacion_actual_id inválido");
+        }
+        if (!isNil(req.body.asignado_bombero_id) && (!Number.isInteger(asignado_bombero_id) || asignado_bombero_id <= 0)) {
+            return badRequest(res, "asignado_bombero_id inválido");
+        }
         if (ubicacion_actual_id && asignado_bombero_id) {
             return badRequest(res, "Un item no puede estar asignado a un bombero y una ubicación al mismo tiempo");
         }
 
+        let ubicacion = null;
+        let bombero = null;
+
         if (ubicacion_actual_id) {
-            const ubic = db.prepare("SELECT * FROM ubicacion WHERE id=?").get(ubicacion_actual_id);
-            if (!ubic) return notFound(res, "Ubicacion no encontrada");
+            ubicacion = db.prepare("SELECT * FROM ubicacion WHERE id=?").get(ubicacion_actual_id);
+            if (!ubicacion) return notFound(res, "Ubicacion no encontrada");
         }
-        
         if (asignado_bombero_id) {
-            const bomb = db.prepare("SELECT * FROM bombero WHERE id=?").get(asignado_bombero_id);
-            if (!bomb) return notFound(res, "Bombero no encontrado");
+            bombero = db.prepare("SELECT * FROM bombero WHERE id=?").get(asignado_bombero_id);
+            if (!bombero) return notFound(res, "Bombero no encontrado");
         }
 
-        const info = db.prepare(`
-            INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-            codigo,
-            categoria,
-            subcategoria,
-            descripcion,
-            marca,
-            modelo,
-            serie,
-            estado,
-            criticidad,
-            ubicacion_actual_id,
-            asignado_bombero_id
-        );
+        const nuevoId = db.transaction(() => {
+            const info = db.prepare(`
+                INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id);
 
-        res.status(201).json({ id: info.lastInsertRowid });
+            const itemId = info.lastInsertRowid;
+            const hacia = bombero
+                ? `Asignado a ${bombero.nombre}`
+                : ubicacion
+                    ? `Ubicado en ${ubicacion.nombre}`
+                    : "Sin asignar";
+
+            db.prepare(`
+                INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion)
+                VALUES (?, 'CREACION', 'Nuevo item', ?, 'Sistema', NULL)
+            `).run(itemId, hacia);
+
+            return itemId;
+        })();
+
+        res.status(201).json({ id: nuevoId });
     } catch (e) {
         if (String(e).includes("UNIQUE")) {
             return conflict(res, "El código del item ya existe");
@@ -264,9 +279,19 @@ app.post("/items", (req, res) => {
     }
 });
 
-// Buscar items (por código o descripción)
+// Buscar items (por código o descripción, con filtros opcionales)
 app.get("/items", (req, res) => {
-  const q = (req.query.q ?? "").trim();
+  const q          = (req.query.q         ?? "").trim();
+  const estado     = (req.query.estado    ?? "").trim();
+  const categoria  = (req.query.categoria ?? "").trim();
+  const criticidad = (req.query.criticidad ?? "").trim();
+
+  if (estado     && !ESTADOS_ITEM.includes(estado))
+    return badRequest(res, `estado inválido. Use: ${ESTADOS_ITEM.join(", ")}`);
+  if (categoria  && !CATEGORIAS.includes(categoria))
+    return badRequest(res, `categoria inválida. Use: ${CATEGORIAS.join(", ")}`);
+  if (criticidad && !CRITICIDADES.includes(criticidad))
+    return badRequest(res, `criticidad inválida. Use: ${CRITICIDADES.join(", ")}`);
 
   const baseSelect = `
     SELECT
@@ -278,23 +303,22 @@ app.get("/items", (req, res) => {
     LEFT JOIN bombero b ON b.id = i.asignado_bombero_id
   `;
 
-  if (!q) {
-    const rows = db.prepare(`
-        ${baseSelect}
-        ORDER BY i.id DESC
-        LIMIT 50    
-    `).all();
-    return res.json(rows);
+  const conditions = [];
+  const params     = [];
+
+  if (q) {
+    conditions.push("(i.codigo LIKE ? OR i.descripcion LIKE ?)");
+    params.push(`%${q}%`, `%${q}%`);
   }
+  if (estado)     { conditions.push("i.estado = ?");     params.push(estado); }
+  if (categoria)  { conditions.push("i.categoria = ?");  params.push(categoria); }
+  if (criticidad) { conditions.push("i.criticidad = ?"); params.push(criticidad); }
 
-  const like = `%${q}%`;
-  const rows = db.prepare(`
-    ${baseSelect}
-    WHERE i.codigo LIKE ? OR i.descripcion LIKE ?
-    ORDER BY i.codigo
-    LIMIT 200
-  `).all(like, like);
+  const where  = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const order  = q ? "ORDER BY i.codigo" : "ORDER BY i.id DESC";
+  const limit  = q ? 200 : 50;
 
+  const rows = db.prepare(`${baseSelect} ${where} ${order} LIMIT ${limit}`).all(...params);
   res.json(rows);
 });
 
@@ -324,6 +348,9 @@ app.put("/items/:id", (req, res) => {
         if (!categoria) return badRequest(res, "categoria es requerida");
         if (!descripcion) return badRequest(res, "descripcion es requerida");
 
+        if (!CATEGORIAS.includes(categoria)) {
+            return badRequest(res, `categoria inválida. Use: ${CATEGORIAS.join(", ")}`);
+        }
         if (!CRITICIDADES.includes(criticidad)) {
             return badRequest(res, `criticidad inválida. Use: ${CRITICIDADES.join(", ")}`);
         }
@@ -334,15 +361,15 @@ app.put("/items/:id", (req, res) => {
         }
 
         db.prepare(`
-            UPDATE item 
-            SET 
-            codigo=?, 
-            categoria=?, 
-            subcategoria=?, 
-            descripcion=?, 
-            marca=?, 
-            modelo=?, 
-            serie=?, 
+            UPDATE item
+            SET
+            codigo=?,
+            categoria=?,
+            subcategoria=?,
+            descripcion=?,
+            marca=?,
+            modelo=?,
+            serie=?,
             criticidad=?,
             actualizado_en=datetime('now')
             WHERE id=?
@@ -357,6 +384,8 @@ app.put("/items/:id", (req, res) => {
             criticidad,
             id
         );
+
+        res.json({ ok: true });
     } catch (e) {
         return serverError(res, e, "Error actualizando item");
     }
@@ -524,6 +553,140 @@ app.post("/items/:id/estado", (req, res) => {
         res.json({ ok: true });
     } catch (e) {
         return serverError(res, e, "Error cambiando estado del item");
+    }
+});
+
+// Reportes
+app.get("/reportes", (_req, res) => {
+    try {
+        const hoy = new Date().toISOString().slice(0, 10);
+        const en30dias = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+        const porEstado = db.prepare(`
+            SELECT estado, COUNT(*) AS total FROM item GROUP BY estado
+        `).all();
+
+        const porCriticidad = db.prepare(`
+            SELECT criticidad, COUNT(*) AS total FROM item GROUP BY criticidad
+        `).all();
+
+        const porCategoria = db.prepare(`
+            SELECT categoria, COUNT(*) AS total FROM item GROUP BY categoria ORDER BY total DESC
+        `).all();
+
+        const sinUbicar = db.prepare(`
+            SELECT i.id, i.codigo, i.descripcion, i.estado, i.criticidad
+            FROM item i
+            WHERE i.ubicacion_actual_id IS NULL AND i.asignado_bombero_id IS NULL
+            ORDER BY i.criticidad DESC, i.codigo
+            LIMIT 50
+        `).all();
+
+        const controlesVencidos = db.prepare(`
+            SELECT c.id, c.tipo, c.fecha_objetivo, c.observacion,
+                   i.id AS item_id, i.codigo, i.descripcion
+            FROM control c
+            JOIN item i ON i.id = c.item_id
+            WHERE c.fecha_real IS NULL AND c.fecha_objetivo < ?
+            ORDER BY c.fecha_objetivo ASC
+            LIMIT 100
+        `).all(hoy);
+
+        const proximosControles = db.prepare(`
+            SELECT c.id, c.tipo, c.fecha_objetivo, c.observacion,
+                   i.id AS item_id, i.codigo, i.descripcion
+            FROM control c
+            JOIN item i ON i.id = c.item_id
+            WHERE c.fecha_real IS NULL AND c.fecha_objetivo >= ? AND c.fecha_objetivo <= ?
+            ORDER BY c.fecha_objetivo ASC
+            LIMIT 100
+        `).all(hoy, en30dias);
+
+        res.json({
+            porEstado,
+            porCriticidad,
+            porCategoria,
+            sinUbicar,
+            controlesVencidos,
+            proximosControles,
+        });
+    } catch (e) {
+        return serverError(res, e, "Error generando reportes");
+    }
+});
+
+const TIPOS_CONTROL = ["INSPECCION", "MANTENCION", "CERTIFICACION", "OTRO"];
+const RESULTADOS_CONTROL = ["APROBADO", "RECHAZADO", "PENDIENTE"];
+
+// Listar controles de un item
+app.get("/items/:id/controles", (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return badRequest(res, "ID de item inválido");
+    try {
+        const rows = db.prepare(`
+            SELECT * FROM control
+            WHERE item_id = ?
+            ORDER BY fecha_objetivo DESC
+            LIMIT 200
+        `).all(id);
+        res.json(rows);
+    } catch (e) {
+        return serverError(res, e, "Error obteniendo controles");
+    }
+});
+
+// Crear control para un item
+app.post("/items/:id/controles", (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) return badRequest(res, "ID de item inválido");
+
+        const item = db.prepare("SELECT id FROM item WHERE id=?").get(id);
+        if (!item) return notFound(res, "Item no encontrado");
+
+        const tipo = cleanText(req.body.tipo);
+        const fecha_objetivo = cleanText(req.body.fecha_objetivo);
+        const observacion = cleanText(req.body.observacion);
+
+        if (!tipo) return badRequest(res, "tipo es requerido");
+        if (!TIPOS_CONTROL.includes(tipo)) return badRequest(res, `tipo inválido. Use: ${TIPOS_CONTROL.join(", ")}`);
+        if (!fecha_objetivo) return badRequest(res, "fecha_objetivo es requerida");
+
+        const info = db.prepare(`
+            INSERT INTO control (item_id, tipo, fecha_objetivo, observacion)
+            VALUES (?, ?, ?, ?)
+        `).run(id, tipo, fecha_objetivo, observacion ?? null);
+
+        res.status(201).json({ id: info.lastInsertRowid });
+    } catch (e) {
+        return serverError(res, e, "Error creando control");
+    }
+});
+
+// Completar / actualizar un control
+app.put("/controles/:id", (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) return badRequest(res, "ID de control inválido");
+
+        const actual = db.prepare("SELECT * FROM control WHERE id=?").get(id);
+        if (!actual) return notFound(res, "Control no encontrado");
+
+        const fecha_real = cleanText(req.body.fecha_real);
+        const resultado = cleanText(req.body.resultado);
+        const observacion = isNil(req.body.observacion) ? actual.observacion : cleanText(req.body.observacion);
+
+        if (!fecha_real) return badRequest(res, "fecha_real es requerida");
+        if (!resultado) return badRequest(res, "resultado es requerido");
+        if (!RESULTADOS_CONTROL.includes(resultado)) return badRequest(res, `resultado inválido. Use: ${RESULTADOS_CONTROL.join(", ")}`);
+
+        db.prepare(`
+            UPDATE control SET fecha_real=?, resultado=?, observacion=? WHERE id=?
+        `).run(fecha_real, resultado, observacion, id);
+
+        res.json({ ok: true });
+    } catch (e) {
+        return serverError(res, e, "Error actualizando control");
     }
 });
 

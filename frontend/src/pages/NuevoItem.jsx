@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { crearItem } from "../api/itemsCrud";
+import { crearItem } from "../api/items";
 import { listarBomberos } from "../api/bomberos";
 import { listarUbicaciones } from "../api/ubicaciones";
 
@@ -243,6 +243,7 @@ export default function NuevoItem() {
             type="button"
             onClick={async () => {
               try {
+                setGuardando(true);
                 const payload = {
                   codigo: form.codigo.trim(),
                   categoria: form.categoria,
