@@ -263,6 +263,9 @@ h1, h2, h3 { margin: 0; }
 
 .modal {
     width: min(720px, 100%);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
     background: var(--surface);
     border-radius: var(--radius);
     border: 1px solid var(--border);
@@ -289,7 +292,7 @@ h1, h2, h3 { margin: 0; }
 }
 .modal-close:hover { color: var(--text); border-color: #555; }
 
-.modal-body { }
+.modal-body { overflow-y: auto; flex: 1; }
 
 /* ===== FILTROS ===== */
 .filtros { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
@@ -401,3 +404,70 @@ h1, h2, h3 { margin: 0; }
     margin-bottom: 12px;
     font-size: 15px;
 }
+
+.importar-seccion-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin: 24px 0 10px;
+}
+
+.importar-seccion-div {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 28px 0 0;
+}
+
+.importar-parcial-stack { margin-top: 14px; }
+
+.importar-parcial-body {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+}
+
+.importar-parcial-resumen {
+    display: flex;
+    gap: 14px;
+    margin-top: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    align-items: center;
+}
+
+.importar-nota  { margin-top: 8px; }
+.importar-error { margin-top: 8px; font-size: 13px; line-height: 1.6; }
+
+/* ===== TRAUMA ===== */
+.trauma-stats {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+    margin-bottom: 20px;
+}
+.trauma-stat { flex: 1; min-width: 100px; text-align: center; padding: 14px 10px; }
+.trauma-stat .stat-number { font-size: 28px; font-weight: 800; line-height: 1; }
+.trauma-stat .stat-label  { font-size: 12px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.5px; }
+
+.trauma-fechas {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+.trauma-fecha-item  { display: flex; flex-direction: column; gap: 2px; }
+.trauma-fecha-label { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.5px; }
+.trauma-fecha-valor { font-size: 13px; color: var(--text-dim); }
+.trauma-acciones    { margin-top: 12px; }
+
+.venc-vencido   { color: var(--c-fuera-servicio); font-weight: 700; font-size: 13px; }
+.venc-proximo   { color: var(--c-mantencion);     font-weight: 700; font-size: 13px; }
+.venc-vigente   { color: var(--c-operativo);      font-weight: 600; font-size: 13px; }
+.venc-sin-fecha { color: var(--text-faint);       font-size: 13px; }

@@ -15,4 +15,8 @@ db.exec(schema);
 
 db.exec("PRAGMA foreign_keys = ON;");
 
+// Migraciones: columnas trauma (seguro si ya existen)
+try { db.exec("ALTER TABLE item ADD COLUMN fecha_recepcion TEXT"); } catch {}
+try { db.exec("ALTER TABLE item ADD COLUMN fecha_vencimiento TEXT"); } catch {}
+
 module.exports = db;

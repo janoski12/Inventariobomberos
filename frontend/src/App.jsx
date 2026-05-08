@@ -7,6 +7,7 @@ import Bomberos from "./pages/Bomberos";
 import Ubicaciones from "./pages/Ubicaciones";
 import Reportes from "./pages/Reportes";
 import Importar from "./pages/Importar";
+import Trauma from "./pages/Trauma";
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
           <Route path="/ubicaciones" element={<Ubicaciones />} />
           <Route path="/reportes" element={<Reportes />} />
           <Route path="/importar" element={<Importar />} />
+          <Route path="/trauma" element={<Trauma />} />
         </Routes>
       </main>
     </BrowserRouter>

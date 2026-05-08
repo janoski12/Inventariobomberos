@@ -8,6 +8,7 @@ export default function NavBar() {
             <NavLink to="/items/nuevo" className={cls}>Nuevo Ítem</NavLink>
             <NavLink to="/bomberos" className={cls}>Bomberos</NavLink>
             <NavLink to="/ubicaciones" className={cls}>Ubicaciones</NavLink>
+            <NavLink to="/trauma" className={cls}>Trauma</NavLink>
             <NavLink to="/reportes" className={cls}>Reportes</NavLink>
             <NavLink to="/importar" className={cls}>Importar</NavLink>
         </div>

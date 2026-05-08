@@ -84,3 +84,17 @@ CREATE TABLE IF NOT EXISTS control (
 );
 
 CREATE INDEX IF NOT EXISTS idx_control_objetivo ON control(tipo, fecha_objetivo);
+
+-- registro de uso de material trauma
+CREATE TABLE IF NOT EXISTS uso_trauma (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id     INTEGER NOT NULL,
+    fecha       TEXT NOT NULL DEFAULT (date('now')),
+    cantidad    INTEGER NOT NULL DEFAULT 1,
+    motivo      TEXT,
+    responsable TEXT,
+    observacion TEXT,
+    FOREIGN KEY (item_id) REFERENCES item(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_uso_trauma_item ON uso_trauma(item_id, fecha);

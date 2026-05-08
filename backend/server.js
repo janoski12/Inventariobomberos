@@ -924,6 +924,349 @@ app.put("/controles/:id", (req, res) => {
     }
 });
 
+// ========================
+// TRAUMA
+// ========================
+
+// Listar todos los ítems TRAUMA con fechas y conteo de usos
+app.get("/trauma", (_req, res) => {
+    try {
+        const rows = db.prepare(`
+            SELECT
+                i.*,
+                u.nombre AS ubicacion_nombre,
+                b.nombre AS bombero_nombre,
+                (SELECT COUNT(*) FROM uso_trauma WHERE item_id = i.id) AS total_usos
+            FROM item i
+            LEFT JOIN ubicacion u ON u.id = i.ubicacion_actual_id
+            LEFT JOIN bombero  b ON b.id = i.asignado_bombero_id
+            WHERE i.categoria = 'TRAUMA'
+            ORDER BY
+                CASE WHEN i.fecha_vencimiento IS NULL THEN 1 ELSE 0 END,
+                i.fecha_vencimiento ASC,
+                i.codigo
+        `).all();
+        res.json(rows);
+    } catch (e) { return serverError(res, e, "Error obteniendo material trauma"); }
+});
+
+// Actualizar fechas de recepción y vencimiento
+app.put("/trauma/:id/fechas", (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) return badRequest(res, "ID inválido");
+
+        const item = db.prepare("SELECT id, categoria FROM item WHERE id = ?").get(id);
+        if (!item) return notFound(res, "Ítem no encontrado");
+        if (item.categoria !== "TRAUMA") return badRequest(res, "El ítem no es de categoría TRAUMA");
+
+        const fecha_recepcion   = cleanText(req.body.fecha_recepcion)   || null;
+        const fecha_vencimiento = cleanText(req.body.fecha_vencimiento) || null;
+
+        db.prepare(`UPDATE item SET fecha_recepcion=?, fecha_vencimiento=?, actualizado_en=datetime('now') WHERE id=?`)
+            .run(fecha_recepcion, fecha_vencimiento, id);
+
+        res.json({ ok: true });
+    } catch (e) { return serverError(res, e, "Error actualizando fechas"); }
+});
+
+// Historial de usos de un ítem trauma
+app.get("/trauma/:id/usos", (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) return badRequest(res, "ID inválido");
+        const rows = db.prepare(`SELECT * FROM uso_trauma WHERE item_id = ? ORDER BY fecha DESC LIMIT 200`).all(id);
+        res.json(rows);
+    } catch (e) { return serverError(res, e, "Error obteniendo usos"); }
+});
+
+// Registrar uso de un ítem trauma
+app.post("/trauma/:id/usos", (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) return badRequest(res, "ID inválido");
+
+        const item = db.prepare("SELECT id, categoria FROM item WHERE id = ?").get(id);
+        if (!item) return notFound(res, "Ítem no encontrado");
+        if (item.categoria !== "TRAUMA") return badRequest(res, "El ítem no es de categoría TRAUMA");
+
+        const cantidad    = Math.max(1, Number(req.body.cantidad) || 1);
+        const motivo      = cleanText(req.body.motivo);
+        const responsable = cleanText(req.body.responsable);
+        const observacion = cleanText(req.body.observacion);
+        const fecha       = cleanText(req.body.fecha) || new Date().toISOString().slice(0, 10);
+
+        const info = db.prepare(`
+            INSERT INTO uso_trauma (item_id, fecha, cantidad, motivo, responsable, observacion)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).run(id, fecha, cantidad, motivo, responsable, observacion);
+
+        res.status(201).json({ id: info.lastInsertRowid });
+    } catch (e) { return serverError(res, e, "Error registrando uso"); }
+});
+
+// Eliminar registro de uso
+app.delete("/trauma/usos/:id", (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) return badRequest(res, "ID inválido");
+        const uso = db.prepare("SELECT id FROM uso_trauma WHERE id = ?").get(id);
+        if (!uso) return notFound(res, "Registro no encontrado");
+        db.prepare("DELETE FROM uso_trauma WHERE id = ?").run(id);
+        res.json({ ok: true });
+    } catch (e) { return serverError(res, e, "Error eliminando uso"); }
+});
+
+// ========================
+// IMPORTACIONES PARCIALES
+// ========================
+
+function parseXlsxBuffer(req, res) {
+    if (!req.file) { badRequest(res, "No se recibió ningún archivo"); return null; }
+    const ext = req.file.originalname.split(".").pop().toLowerCase();
+    if (ext !== "xlsx" && ext !== "xls") { badRequest(res, "El archivo debe ser .xlsx o .xls"); return null; }
+    return req.file.buffer;
+}
+
+function normXlsx(v) {
+    if (v === undefined || v === null) return "";
+    return String(v).trim();
+}
+
+// Plantilla parcial — Ubicaciones
+app.get("/plantilla/ubicaciones", (_req, res) => {
+    try {
+        const xlsx = require("xlsx");
+        const datos = [
+            { nombre: "Bodega Principal", tipo: "BODEGA",    responsable: "Juan Pérez", codigo_qr: "", activo: 1 },
+            { nombre: "Carro 1",          tipo: "CARRO",     responsable: "",           codigo_qr: "", activo: 1 },
+            { nombre: "Sala Trauma",      tipo: "SALA",      responsable: "",           codigo_qr: "", activo: 1 },
+        ];
+        const wb = xlsx.utils.book_new();
+        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet(datos), "Ubicaciones");
+        const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", 'attachment; filename="plantilla_ubicaciones.xlsx"');
+        res.send(buf);
+    } catch (e) { return serverError(res, e, "Error generando plantilla"); }
+});
+
+// Plantilla parcial — Bomberos
+app.get("/plantilla/bomberos", (_req, res) => {
+    try {
+        const xlsx = require("xlsx");
+        const datos = [
+            { nombre: "Juan Pérez",     cargo: "Teniente",   estado: "ACTIVO",   observaciones: "" },
+            { nombre: "María González", cargo: "Voluntario", estado: "ACTIVO",   observaciones: "" },
+        ];
+        const wb = xlsx.utils.book_new();
+        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet(datos), "Bomberos");
+        const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", 'attachment; filename="plantilla_bomberos.xlsx"');
+        res.send(buf);
+    } catch (e) { return serverError(res, e, "Error generando plantilla"); }
+});
+
+// Plantilla parcial — Items
+app.get("/plantilla/items", (_req, res) => {
+    try {
+        const xlsx = require("xlsx");
+        const items = [
+            { codigo: "EPP-0001", categoria: "EPP",         subcategoria: "Casco",    descripcion: "Casco Estructural",      marca: "Bullard",  modelo: "FH2",    serie: "SN-001", estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "",             bombero_nombre: "Juan Pérez" },
+            { codigo: "TRM-0001", categoria: "TRAUMA",      subcategoria: "Botiquín", descripcion: "Botiquín Trauma Tipo A", marca: "",         modelo: "",       serie: "",        estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "Sala Trauma",  bombero_nombre: "" },
+            { codigo: "HRR-0001", categoria: "HERRAMIENTA", subcategoria: "Corte",    descripcion: "Amoladora Angular 9\"", marca: "Makita",   modelo: "GA9020", serie: "MK-123",  estado: "MANTENCION",criticidad: "MEDIA", ubicacion_nombre: "Bodega Principal", bombero_nombre: "" },
+        ];
+        const controles = [
+            { codigo_item: "EPP-0001", tipo: "INSPECCION", fecha_objetivo: "2025-06-01", fecha_real: "", resultado: "", observacion: "Inspección anual" },
+            { codigo_item: "HRR-0001", tipo: "MANTENCION", fecha_objetivo: "2025-04-30", fecha_real: "", resultado: "", observacion: "Mantenimiento preventivo" },
+        ];
+        const wb = xlsx.utils.book_new();
+        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet(items),    "Items");
+        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet(controles), "Controles");
+        const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", 'attachment; filename="plantilla_items.xlsx"');
+        res.send(buf);
+    } catch (e) { return serverError(res, e, "Error generando plantilla"); }
+});
+
+// Importar ubicaciones — upsert por nombre
+app.post("/importar/ubicaciones", upload.single("archivo"), (req, res) => {
+    const buffer = parseXlsxBuffer(req, res);
+    if (!buffer) return;
+    try {
+        const xlsx = require("xlsx");
+        const wb = xlsx.read(buffer, { type: "buffer" });
+        const ws = wb.Sheets["Ubicaciones"];
+        if (!ws) return badRequest(res, 'No existe la hoja "Ubicaciones" en el archivo');
+        const filas = xlsx.utils.sheet_to_json(ws, { defval: "" });
+
+        const nombres = new Set();
+        for (const u of filas) {
+            const n = normXlsx(u.nombre); if (!n) continue;
+            if (nombres.has(n)) return badRequest(res, `Nombre duplicado en el archivo: "${n}"`);
+            nombres.add(n);
+        }
+
+        const getUbic = db.prepare("SELECT id FROM ubicacion WHERE nombre = ?");
+        const insUbic = db.prepare("INSERT INTO ubicacion (nombre, tipo, responsable, codigo_qr, activo) VALUES (?, ?, ?, ?, ?)");
+        const updUbic = db.prepare("UPDATE ubicacion SET tipo=?, responsable=?, codigo_qr=?, activo=? WHERE nombre=?");
+
+        let insertados = 0, actualizados = 0;
+
+        db.transaction(() => {
+            for (const u of filas) {
+                const nombre = normXlsx(u.nombre); if (!nombre) continue;
+                const tipo   = TIPOS_UBICACION.includes(normXlsx(u.tipo).toUpperCase()) ? normXlsx(u.tipo).toUpperCase() : "OTRO";
+                const resp   = normXlsx(u.responsable) || null;
+                const qr     = normXlsx(u.codigo_qr)   || null;
+                const activo = normXlsx(u.activo) === "0" ? 0 : 1;
+                if (getUbic.get(nombre)) { updUbic.run(tipo, resp, qr, activo, nombre); actualizados++; }
+                else                     { insUbic.run(nombre, tipo, resp, qr, activo); insertados++; }
+            }
+        })();
+
+        res.json({ ok: true, resumen: { insertados, actualizados } });
+    } catch (e) { return res.status(400).json({ error: String(e.message ?? e) }); }
+});
+
+// Importar bomberos — upsert por nombre
+app.post("/importar/bomberos", upload.single("archivo"), (req, res) => {
+    const buffer = parseXlsxBuffer(req, res);
+    if (!buffer) return;
+    try {
+        const xlsx = require("xlsx");
+        const wb = xlsx.read(buffer, { type: "buffer" });
+        const ws = wb.Sheets["Bomberos"];
+        if (!ws) return badRequest(res, 'No existe la hoja "Bomberos" en el archivo');
+        const filas = xlsx.utils.sheet_to_json(ws, { defval: "" });
+
+        const nombres = new Set();
+        for (const b of filas) {
+            const n = normXlsx(b.nombre); if (!n) continue;
+            if (nombres.has(n)) return badRequest(res, `Nombre duplicado en el archivo: "${n}"`);
+            nombres.add(n);
+        }
+
+        const getBom = db.prepare("SELECT id FROM bombero WHERE nombre = ?");
+        const insBom = db.prepare("INSERT INTO bombero (nombre, cargo, estado, observaciones) VALUES (?, ?, ?, ?)");
+        const updBom = db.prepare("UPDATE bombero SET cargo=?, estado=?, observaciones=? WHERE nombre=?");
+
+        let insertados = 0, actualizados = 0;
+
+        db.transaction(() => {
+            for (const b of filas) {
+                const nombre = normXlsx(b.nombre); if (!nombre) continue;
+                const cargo  = normXlsx(b.cargo) || null;
+                const estado = ESTADOS_BOMBERO.includes(normXlsx(b.estado).toUpperCase()) ? normXlsx(b.estado).toUpperCase() : "ACTIVO";
+                const obs    = normXlsx(b.observaciones) || null;
+                if (getBom.get(nombre)) { updBom.run(cargo, estado, obs, nombre); actualizados++; }
+                else                    { insBom.run(nombre, cargo, estado, obs); insertados++; }
+            }
+        })();
+
+        res.json({ ok: true, resumen: { insertados, actualizados } });
+    } catch (e) { return res.status(400).json({ error: String(e.message ?? e) }); }
+});
+
+// Importar items — upsert por código, valida todas las referencias antes de insertar
+app.post("/importar/items", upload.single("archivo"), (req, res) => {
+    const buffer = parseXlsxBuffer(req, res);
+    if (!buffer) return;
+    try {
+        const xlsx = require("xlsx");
+        const wb = xlsx.read(buffer, { type: "buffer" });
+
+        const wsItems = wb.Sheets["Items"];
+        if (!wsItems) return badRequest(res, 'No existe la hoja "Items" en el archivo');
+        const filas = xlsx.utils.sheet_to_json(wsItems, { defval: "" });
+        const filasControl = wb.Sheets["Controles"]
+            ? xlsx.utils.sheet_to_json(wb.Sheets["Controles"], { defval: "" })
+            : [];
+
+        const codigos = new Set();
+        for (const it of filas) {
+            const c = normXlsx(it.codigo); if (!c) continue;
+            if (codigos.has(c)) return badRequest(res, `Código duplicado en el archivo: "${c}"`);
+            codigos.add(c);
+        }
+
+        // Cargar referencias de la BD
+        const ubicMap = new Map();
+        for (const r of db.prepare("SELECT id, nombre FROM ubicacion").all()) ubicMap.set(r.nombre, r.id);
+        const bomMap = new Map();
+        for (const r of db.prepare("SELECT id, nombre FROM bombero").all()) bomMap.set(r.nombre, r.id);
+
+        // Validar TODAS las referencias antes de insertar (no para en el primero)
+        const errores = [];
+        for (const it of filas) {
+            const codigo     = normXlsx(it.codigo); if (!codigo) continue;
+            const ubicNombre = normXlsx(it.ubicacion_nombre);
+            const bomNombre  = normXlsx(it.bombero_nombre);
+            if (ubicNombre && bomNombre)
+                errores.push(`"${codigo}": no puede tener ubicación y bombero simultáneamente`);
+            else {
+                if (ubicNombre && !ubicMap.has(ubicNombre)) errores.push(`"${codigo}": ubicación no encontrada → "${ubicNombre}"`);
+                if (bomNombre  && !bomMap.has(bomNombre))   errores.push(`"${codigo}": bombero no encontrado → "${bomNombre}"`);
+            }
+        }
+        if (errores.length > 0)
+            return res.status(400).json({ error: `Referencias no encontradas:\n${errores.map(e => "• " + e).join("\n")}` });
+
+        const getItem = db.prepare("SELECT id FROM item WHERE codigo = ?");
+        const insItem = db.prepare("INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        const updItem = db.prepare("UPDATE item SET categoria=?, subcategoria=?, descripcion=?, marca=?, modelo=?, serie=?, estado=?, criticidad=?, ubicacion_actual_id=?, asignado_bombero_id=?, actualizado_en=datetime('now') WHERE codigo=?");
+        const insMov  = db.prepare("INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))");
+        const insCtrl = db.prepare("INSERT INTO control (item_id, tipo, fecha_objetivo, fecha_real, resultado, observacion) VALUES (?, ?, ?, ?, ?, ?)");
+
+        let insertados = 0, actualizados = 0, controles = 0;
+
+        db.transaction(() => {
+            for (const it of filas) {
+                const codigo      = normXlsx(it.codigo); if (!codigo) continue;
+                const categoria   = CATEGORIAS.includes(normXlsx(it.categoria).toUpperCase())   ? normXlsx(it.categoria).toUpperCase()   : "OTRO";
+                const estado      = ESTADOS_ITEM.includes(normXlsx(it.estado).toUpperCase())     ? normXlsx(it.estado).toUpperCase()     : "OPERATIVO";
+                const criticidad  = CRITICIDADES.includes(normXlsx(it.criticidad).toUpperCase()) ? normXlsx(it.criticidad).toUpperCase() : "MEDIA";
+                const subcategoria = normXlsx(it.subcategoria) || null;
+                const descripcion  = normXlsx(it.descripcion)  || codigo;
+                const marca        = normXlsx(it.marca)         || null;
+                const modelo       = normXlsx(it.modelo)        || null;
+                const serie        = normXlsx(it.serie)         || null;
+                const ubicNombre   = normXlsx(it.ubicacion_nombre);
+                const bomNombre    = normXlsx(it.bombero_nombre);
+                const ubicId       = ubicNombre ? ubicMap.get(ubicNombre) : null;
+                const bomId        = bomNombre  ? bomMap.get(bomNombre)   : null;
+
+                const existente = getItem.get(codigo);
+                if (existente) {
+                    updItem.run(categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicId, bomId, codigo);
+                    actualizados++;
+                } else {
+                    const info  = insItem.run(codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicId, bomId);
+                    const hacia = bomId  ? `Asignado a ${bomNombre}` : ubicId ? `Ubicado en ${ubicNombre}` : "Sin ubicar";
+                    insMov.run(info.lastInsertRowid, "ALTA", "Importación parcial", hacia, "Sistema", "Importación parcial desde Excel");
+                    insertados++;
+                }
+            }
+
+            const itemMap = new Map();
+            for (const r of db.prepare("SELECT id, codigo FROM item").all()) itemMap.set(r.codigo, r.id);
+
+            for (const c of filasControl) {
+                const codigo_item = normXlsx(c.codigo_item); if (!codigo_item) continue;
+                const itemId = itemMap.get(codigo_item);
+                if (!itemId) continue;
+                const tipo = TIPOS_CONTROL.includes(normXlsx(c.tipo).toUpperCase()) ? normXlsx(c.tipo).toUpperCase() : "INSPECCION";
+                insCtrl.run(itemId, tipo, normXlsx(c.fecha_objetivo) || null, normXlsx(c.fecha_real) || null, normXlsx(c.resultado) || null, normXlsx(c.observacion) || null);
+                controles++;
+            }
+        })();
+
+        res.json({ ok: true, resumen: { insertados, actualizados, controles } });
+    } catch (e) { return res.status(400).json({ error: String(e.message ?? e) }); }
+});
+
 // Iniciar servidor
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`API Inventario corriendo en http://localhost:${PORT}`));
