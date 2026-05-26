@@ -55,3 +55,17 @@ export function cambiarEstadoItem(id, payload) {
 export function eliminarItem(id) {
   return request(`${API_URL}/items/${id}`, { method: "DELETE" });
 }
+
+export function obtenerSubcategorias(categoria) {
+  const qs = categoria ? `?categoria=${encodeURIComponent(categoria)}` : "";
+  return request(`${API_URL}/items/meta/subcategorias${qs}`);
+}
+
+export function obtenerMarcas() {
+  return request(`${API_URL}/items/meta/marcas`);
+}
+
+export function obtenerModelos(marca) {
+  const qs = marca ? `?marca=${encodeURIComponent(marca)}` : "";
+  return request(`${API_URL}/items/meta/modelos${qs}`);
+}

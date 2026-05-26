@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { obtenerItem, obtenerMovimientos, asignarItem, cambiarEstadoItem, moverItem, actualizarItem, eliminarItem } from "../api/items";
+import { obtenerItem, obtenerMovimientos, asignarItem, cambiarEstadoItem, moverItem, actualizarItem, eliminarItem, obtenerSubcategorias, obtenerMarcas, obtenerModelos } from "../api/items";
+import CreatableSelect from "../components/CreatableSelect";
 import { listarBomberos } from "../api/bomberos";
 import { listarUbicaciones } from "../api/ubicaciones";
 import Modal from "../components/Modal";
@@ -44,6 +45,25 @@ export default function FichaItem() {
 
   const [openEditDatos, setOpenEditDatos] = useState(false);
   const [editDatos, setEditDatos] = useState(null);
+
+  const [optsSubcat, setOptsSubcat] = useState([]);
+  const [optsMarca, setOptsMarca]   = useState([]);
+  const [optsModelo, setOptsModelo] = useState([]);
+
+  useEffect(() => {
+    obtenerMarcas().catch(() => []).then(setOptsMarca);
+  }, []);
+
+  const editCategoria = editDatos?.categoria;
+  useEffect(() => {
+    if (!editCategoria) return;
+    obtenerSubcategorias(editCategoria).catch(() => []).then(setOptsSubcat);
+  }, [editCategoria]);
+
+  const editMarca = editDatos?.marca;
+  useEffect(() => {
+    obtenerModelos(editMarca ?? "").catch(() => []).then(setOptsModelo);
+  }, [editMarca]);
 
   const [controles, setControles] = useState([]);
   const [openNuevoControl, setOpenNuevoControl] = useState(false);
@@ -679,12 +699,11 @@ export default function FichaItem() {
 
             <label className="label">
               Subcategoría
-              <input
-                className="input"
+              <CreatableSelect
                 value={editDatos.subcategoria}
-                onChange={(e) =>
-                  setEditDatos((p) => ({ ...p, subcategoria: e.target.value }))
-                }
+                onChange={(v) => setEditDatos((p) => ({ ...p, subcategoria: v }))}
+                options={optsSubcat}
+                placeholder={`Subcategorías de ${editDatos.categoria}`}
               />
             </label>
 
@@ -701,23 +720,21 @@ export default function FichaItem() {
 
             <label className="label">
               Marca
-              <input
-                className="input"
+              <CreatableSelect
                 value={editDatos.marca}
-                onChange={(e) =>
-                  setEditDatos((p) => ({ ...p, marca: e.target.value }))
-                }
+                onChange={(v) => setEditDatos((p) => ({ ...p, marca: v, modelo: "" }))}
+                options={optsMarca}
+                placeholder="Ej: 3M, MSA, Zoll"
               />
             </label>
 
             <label className="label">
               Modelo
-              <input
-                className="input"
+              <CreatableSelect
                 value={editDatos.modelo}
-                onChange={(e) =>
-                  setEditDatos((p) => ({ ...p, modelo: e.target.value }))
-                }
+                onChange={(v) => setEditDatos((p) => ({ ...p, modelo: v }))}
+                options={optsModelo}
+                placeholder={editDatos.marca ? `Modelos de ${editDatos.marca}` : "Selecciona una marca primero"}
               />
             </label>
 

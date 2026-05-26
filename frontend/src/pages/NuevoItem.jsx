@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { crearItem } from "../api/items";
+import { crearItem, obtenerSubcategorias, obtenerMarcas, obtenerModelos } from "../api/items";
 import { listarBomberos } from "../api/bomberos";
 import { listarUbicaciones } from "../api/ubicaciones";
+import CreatableSelect from "../components/CreatableSelect";
 
 export default function NuevoItem() {
   const navigate = useNavigate();
@@ -10,6 +11,10 @@ export default function NuevoItem() {
   const [bomberos, setBomberos] = useState([]);
   const [ubicaciones, setUbicaciones] = useState([]);
   const [guardando, setGuardando] = useState(false);
+
+  const [optsSubcat, setOptsSubcat] = useState([]);
+  const [optsMarca, setOptsMarca]   = useState([]);
+  const [optsModelo, setOptsModelo] = useState([]);
 
   const [form, setForm] = useState({
     codigo: "",
@@ -28,14 +33,25 @@ export default function NuevoItem() {
 
   useEffect(() => {
     (async () => {
-      const [b, u] = await Promise.all([
+      const [b, u, marcas] = await Promise.all([
         listarBomberos().catch(() => []),
         listarUbicaciones().catch(() => []),
+        obtenerMarcas().catch(() => []),
       ]);
       setBomberos(b);
       setUbicaciones(u);
+      setOptsMarca(marcas);
     })();
   }, []);
+
+  useEffect(() => {
+    obtenerSubcategorias(form.categoria).catch(() => []).then(setOptsSubcat);
+    setForm(p => ({ ...p, subcategoria: "" }));
+  }, [form.categoria]);
+
+  useEffect(() => {
+    obtenerModelos(form.marca).catch(() => []).then(setOptsModelo);
+  }, [form.marca]);
 
   const puedeGuardar =
     form.codigo.trim() &&
@@ -92,13 +108,11 @@ export default function NuevoItem() {
 
           <label className="label">
             Subcategoría
-            <input
-              className="input"
+            <CreatableSelect
               value={form.subcategoria}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, subcategoria: e.target.value }))
-              }
-              placeholder="Ej: Casco / Guantes / Chaqueta "
+              onChange={(v) => setForm((p) => ({ ...p, subcategoria: v }))}
+              options={optsSubcat}
+              placeholder={`Subcategorías de ${form.categoria}`}
             />
           </label>
 
@@ -135,23 +149,21 @@ export default function NuevoItem() {
 
           <label className="label">
             Marca
-            <input
-              className="input"
+            <CreatableSelect
               value={form.marca}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, marca: e.target.value }))
-              }
+              onChange={(v) => setForm((p) => ({ ...p, marca: v, modelo: "" }))}
+              options={optsMarca}
+              placeholder="Ej: 3M, MSA, Zoll"
             />
           </label>
 
           <label className="label">
             Modelo
-            <input
-              className="input"
+            <CreatableSelect
               value={form.modelo}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, modelo: e.target.value }))
-              }
+              onChange={(v) => setForm((p) => ({ ...p, modelo: v }))}
+              options={optsModelo}
+              placeholder={form.marca ? `Modelos de ${form.marca}` : "Selecciona una marca primero"}
             />
           </label>
 

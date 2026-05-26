@@ -414,6 +414,28 @@ app.get("/items/:id/movimientos", (req, res) => {
 
 });
 
+// Metadatos para dropdowns creativos
+app.get("/items/meta/subcategorias", (req, res) => {
+    const { categoria } = req.query;
+    const rows = categoria
+        ? db.prepare("SELECT DISTINCT subcategoria FROM item WHERE categoria = ? AND subcategoria IS NOT NULL ORDER BY subcategoria").all(categoria)
+        : db.prepare("SELECT DISTINCT subcategoria FROM item WHERE subcategoria IS NOT NULL ORDER BY subcategoria").all();
+    res.json(rows.map(r => r.subcategoria));
+});
+
+app.get("/items/meta/marcas", (_req, res) => {
+    const rows = db.prepare("SELECT DISTINCT marca FROM item WHERE marca IS NOT NULL ORDER BY marca").all();
+    res.json(rows.map(r => r.marca));
+});
+
+app.get("/items/meta/modelos", (req, res) => {
+    const { marca } = req.query;
+    const rows = marca
+        ? db.prepare("SELECT DISTINCT modelo FROM item WHERE marca = ? AND modelo IS NOT NULL ORDER BY modelo").all(marca)
+        : db.prepare("SELECT DISTINCT modelo FROM item WHERE modelo IS NOT NULL ORDER BY modelo").all();
+    res.json(rows.map(r => r.modelo));
+});
+
 app.get("/items/:id", (req, res) => {
     const id = Number(req.params.id);
 

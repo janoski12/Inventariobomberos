@@ -471,3 +471,28 @@ h1, h2, h3 { margin: 0; }
 .venc-proximo   { color: var(--c-mantencion);     font-weight: 700; font-size: 13px; }
 .venc-vigente   { color: var(--c-operativo);      font-weight: 600; font-size: 13px; }
 .venc-sin-fecha { color: var(--text-faint);       font-size: 13px; }
+
+/* ===== CREATABLE SELECT ===== */
+.cs-wrap { position: relative; }
+.cs-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    z-index: 200;
+    max-height: 200px;
+    overflow-y: auto;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+.cs-option {
+    padding: 9px 12px;
+    font-size: 14px;
+    color: var(--text-dim);
+    cursor: pointer;
+}
+.cs-option:hover        { background: rgba(255,255,255,0.06); color: var(--text); }
+.cs-option--active      { color: var(--text); font-weight: 600; }
+.cs-option--create      { color: var(--accent); border-top: 1px solid var(--border); font-weight: 600; }
