@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { crearItem, obtenerSubcategorias, obtenerMarcas, obtenerModelos } from "../api/items";
+import { useDialog } from "../context/DialogContext";
 import { listarBomberos } from "../api/bomberos";
 import { listarUbicaciones } from "../api/ubicaciones";
 import CreatableSelect from "../components/CreatableSelect";
 
 export default function NuevoItem() {
   const navigate = useNavigate();
+  const { toast } = useDialog();
 
   const [bomberos, setBomberos] = useState([]);
   const [ubicaciones, setUbicaciones] = useState([]);
@@ -284,13 +286,13 @@ export default function NuevoItem() {
 
                 const r = await crearItem(payload);
 
-                alert("Ítem creado");
+                toast("Ítem creado", "success");
                 // si backend retorna {id: ...}, navegamos a la ficha
                 if (r?.id) navigate(`/items/${r.id}`);
                 else navigate("/");
               } catch (e) {
                 console.error(e);
-                alert("No se pudo crear ítem (revisa backend / campos).");
+                toast("No se pudo crear ítem (revisa backend / campos).");
               } finally {
                 setGuardando(false);
               }

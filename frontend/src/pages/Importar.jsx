@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { importarExcel, importarParcial, descargarPlantilla, descargarPlantillaParcial } from "../api/importar";
+import { useDialog } from "../context/DialogContext";
 
 export default function Importar() {
+  const { toast } = useDialog();
   const [archivo, setArchivo]       = useState(null);
   const [confirmado, setConfirmado] = useState(false);
   const [importando, setImportando] = useState(false);
@@ -15,7 +17,7 @@ export default function Importar() {
       setDescargando(true);
       await descargarPlantilla();
     } catch {
-      alert("No se pudo descargar la plantilla.");
+      toast("No se pudo descargar la plantilla.");
     } finally {
       setDescargando(false);
     }
@@ -130,6 +132,7 @@ export default function Importar() {
 }
 
 function SeccionParcial({ titulo, descripcion, seccion, nota }) {
+  const { toast } = useDialog();
   const [archivo, setArchivo]         = useState(null);
   const [importando, setImportando]   = useState(false);
   const [descargando, setDescargando] = useState(false);
@@ -142,7 +145,7 @@ function SeccionParcial({ titulo, descripcion, seccion, nota }) {
       setDescargando(true);
       await descargarPlantillaParcial(seccion);
     } catch {
-      alert("No se pudo descargar la plantilla.");
+      toast("No se pudo descargar la plantilla.");
     } finally {
       setDescargando(false);
     }

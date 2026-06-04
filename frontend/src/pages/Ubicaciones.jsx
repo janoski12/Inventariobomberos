@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { actualizarUbicacion, crearUbicacion, eliminarUbicacion, listarUbicaciones } from "../api/ubicaciones";
 import Modal from "../components/Modal";
+import { useDialog } from "../context/DialogContext";
 
 const TIPOS = ["BODEGA", "SALA", "SALON", "CONTAINER", "CARRO", "CASILLERO", "OTRO"];
 
@@ -19,6 +20,7 @@ export default function Ubicaciones() {
     activo: 1,
   });
 
+  const { toast, confirm } = useDialog();
   const [openEdit, setOpenEdit] = useState(false);
   const [edit, setEdit] = useState(null);
 
@@ -137,10 +139,10 @@ export default function Ubicaciones() {
                   activo: 1,
                 });
                 await cargar();
-                alert("Ubicación creada");
+                toast("Ubicación creada", "success");
               } catch (e) {
                 console.error(e);
-                alert("No se pudo crear ubicación (revisa backend).");
+                toast("No se pudo crear ubicación (revisa backend).");
               } finally {
                 setGuardando(false);
               }
@@ -198,13 +200,13 @@ export default function Ubicaciones() {
                   className="btn-danger"
                   disabled={guardando}
                   onClick={async () => {
-                    if (!window.confirm(`¿Eliminar "${u.nombre}"? Esta acción no se puede deshacer.`)) return;
+                    if (!await confirm(`¿Eliminar "${u.nombre}"? Esta acción no se puede deshacer.`)) return;
                     try {
                       setGuardando(true);
                       await eliminarUbicacion(u.id);
                       await cargar();
                     } catch (e) {
-                      alert(e.message);
+                      toast(e.message);
                     } finally {
                       setGuardando(false);
                     }
@@ -291,7 +293,7 @@ export default function Ubicaciones() {
                     setOpenEdit(false);
                   } catch (e) {
                     console.error(e);
-                    alert("No se pudo actualizar ubicación.");
+                    toast("No se pudo actualizar ubicación.");
                   } finally {
                     setGuardando(false);
                   }

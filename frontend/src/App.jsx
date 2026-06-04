@@ -1,4 +1,5 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { DialogProvider } from './context/DialogContext';
 import NavBar from './components/NavBar';
 import BusquedaItems from './pages/BusquedaItems';
 import FichaItem from './pages/FichaItem';
@@ -13,6 +14,7 @@ import Trauma from "./pages/Trauma";
 
 function App() {
   return (
+    <DialogProvider>
     <BrowserRouter>
       <header className="app-header">
         <span className="app-header-badge">CBT10</span>
@@ -34,6 +36,7 @@ function App() {
         </Routes>
       </main>
     </BrowserRouter>
+    </DialogProvider>
   );
 }
 

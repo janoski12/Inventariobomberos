@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { actualizarBombero, crearBombero, eliminarBombero, listarBomberos } from "../api/bomberos";
 import Modal from "../components/Modal";
+import { useDialog } from "../context/DialogContext";
 
 const CARGOS = [
   "Comandante", "Director", "Capitan", "Secretario", "Prosecretario",
@@ -17,6 +18,7 @@ export default function Bomberos() {
   const [error, setError]       = useState("");
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const { toast, confirm } = useDialog();
   const [form, setForm]         = useState(FORM_VACIO);
   const [openEdit, setOpenEdit] = useState(false);
   const [edit, setEdit]         = useState(null);
@@ -104,7 +106,7 @@ export default function Bomberos() {
                 setForm(FORM_VACIO);
                 await cargar();
               } catch (e) {
-                alert(e.message);
+                toast(e.message);
               } finally {
                 setGuardando(false);
               }
@@ -157,12 +159,12 @@ export default function Bomberos() {
                 </button>
                 <button className="btn-danger" disabled={guardando}
                   onClick={async () => {
-                    if (!window.confirm(`¿Eliminar a ${b.nombre}? Esta acción no se puede deshacer.`)) return;
+                    if (!await confirm(`¿Eliminar a ${b.nombre}? Esta acción no se puede deshacer.`)) return;
                     try {
                       setGuardando(true);
                       await eliminarBombero(b.id);
                       await cargar();
-                    } catch (e) { alert(e.message); }
+                    } catch (e) { toast(e.message); }
                     finally { setGuardando(false); }
                   }}>
                   Eliminar
@@ -238,7 +240,7 @@ export default function Bomberos() {
                     });
                     await cargar();
                     setOpenEdit(false);
-                  } catch (e) { alert(e.message); }
+                  } catch (e) { toast(e.message); }
                   finally { setGuardando(false); }
                 }}>
                 Guardar cambios

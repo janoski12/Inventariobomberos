@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { obtenerReportes, descargarPlantilla } from "../api/reportes";
+import { useDialog } from "../context/DialogContext";
 
 const CLASE_ESTADO = {
   OPERATIVO: "text-operativo",
@@ -16,6 +17,7 @@ const CLASE_CRITICIDAD = {
 };
 
 export default function Reportes() {
+  const { toast } = useDialog();
   const [data, setData] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
@@ -45,7 +47,7 @@ export default function Reportes() {
               setDescargando(true);
               await descargarPlantilla();
             } catch {
-              alert("No se pudo descargar la plantilla. Revisa que el backend esté activo.");
+              toast("No se pudo descargar la plantilla. Revisa que el backend esté activo.");
             } finally {
               setDescargando(false);
             }

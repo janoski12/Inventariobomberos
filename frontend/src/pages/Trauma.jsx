@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { obtenerTrauma, actualizarFechasTrauma, obtenerUsosTrauma, registrarUso, eliminarUso } from "../api/trauma";
 import Modal from "../components/Modal";
+import { useDialog } from "../context/DialogContext";
 
 const CHIP_ESTADO = {
   OPERATIVO:     "chip chip--operativo",
@@ -32,6 +33,7 @@ function computarStats(items) {
 }
 
 export default function Trauma() {
+  const { toast, confirm } = useDialog();
   const [items, setItems]       = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError]       = useState("");
@@ -185,7 +187,7 @@ export default function Trauma() {
                     });
                     await cargar();
                     setOpenFechas(false);
-                  } catch (e) { alert(e.message); }
+                  } catch (e) { toast(e.message); }
                   finally { setGuardandoFechas(false); }
                 }}>
                 Guardar
@@ -245,7 +247,7 @@ export default function Trauma() {
                       await cargar();
                       await cargarUsos(itemUsos.id);
                       setFormUso({ fecha: new Date().toISOString().slice(0, 10), cantidad: 1, motivo: "", responsable: "", observacion: "" });
-                    } catch (e) { alert(e.message); }
+                    } catch (e) { toast(e.message); }
                     finally { setGuardandoUso(false); }
                   }}>
                   Registrar
@@ -273,9 +275,9 @@ export default function Trauma() {
                         </div>
                       </div>
                       <button className="btn-danger" onClick={async () => {
-                        if (!window.confirm("¿Eliminar este registro?")) return;
+                        if (!await confirm("¿Eliminar este registro?")) return;
                         try { await eliminarUso(u.id); await cargar(); await cargarUsos(itemUsos.id); }
-                        catch (e) { alert(e.message); }
+                        catch (e) { toast(e.message); }
                       }}>✕</button>
                     </div>
                   ))}

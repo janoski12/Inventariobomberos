@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { obtenerItem, obtenerMovimientos, asignarItem, cambiarEstadoItem, moverItem, actualizarItem, eliminarItem, obtenerSubcategorias, obtenerMarcas, obtenerModelos } from "../api/items";
 import CreatableSelect from "../components/CreatableSelect";
+import { useDialog } from "../context/DialogContext";
 import { listarBomberos } from "../api/bomberos";
 import { listarUbicaciones } from "../api/ubicaciones";
 import Modal from "../components/Modal";
@@ -11,6 +12,7 @@ import { obtenerControles, crearControl, completarControl } from "../api/control
 export default function FichaItem() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { toast, confirm } = useDialog();
 
   const [item, setItem] = useState(null);
   const [movs, setMovs] = useState([]);
@@ -41,7 +43,6 @@ export default function FichaItem() {
   });
 
   const [guardando, setGuardando] = useState(false);
-  const [msg, setMsg] = useState("");
 
   const [openEditDatos, setOpenEditDatos] = useState(false);
   const [editDatos, setEditDatos] = useState(null);
@@ -118,11 +119,6 @@ export default function FichaItem() {
     return () => (cancelado = true);
   }, [id]);
 
-  function toast(texto) {
-    setMsg(texto);
-    setTimeout(() => setMsg(""), 2500);
-  }
-
   if (cargando) {
     return (
       <div className="container">
@@ -185,12 +181,12 @@ export default function FichaItem() {
         <button
           className="btn-danger"
           onClick={async () => {
-            if (!window.confirm(`¿Eliminar "${item.codigo} - ${item.descripcion}"? Se borrarán también sus movimientos y controles. Esta acción no se puede deshacer.`)) return;
+            if (!await confirm(`¿Eliminar "${item.codigo} - ${item.descripcion}"? Se borrarán también sus movimientos y controles. Esta acción no se puede deshacer.`)) return;
             try {
               await eliminarItem(id);
               navigate("/");
             } catch (e) {
-              alert(e.message);
+              toast(e.message);
             }
           }}
         >
@@ -217,11 +213,6 @@ export default function FichaItem() {
         </button>
       </div>
 
-      {msg && (
-        <div className="muted" style={{ marginTop: 10 }}>
-          {msg}
-        </div>
-      )}
 
       <div className="stack" style={{ marginTop: 10 }}>
         <InfoRow label="Categoria" value={item.categoria} />
@@ -357,11 +348,11 @@ export default function FichaItem() {
                     observacion: formControl.observacion || null,
                   });
                   await recargarFicha();
-                  toast("Control agregado");
+                  toast("Control agregado", "success");
                   setOpenNuevoControl(false);
                 } catch (e) {
                   console.error(e);
-                  alert("No se pudo agregar el control.");
+                  toast("No se pudo agregar el control.");
                 } finally {
                   setGuardando(false);
                 }
@@ -412,11 +403,11 @@ export default function FichaItem() {
                     observacion: formCompletar.observacion || null,
                   });
                   await recargarFicha();
-                  toast("Resultado registrado");
+                  toast("Resultado registrado", "success");
                   setOpenCompletarControl(false);
                 } catch (e) {
                   console.error(e);
-                  alert("No se pudo registrar el resultado.");
+                  toast("No se pudo registrar el resultado.");
                 } finally {
                   setGuardando(false);
                 }
@@ -492,11 +483,11 @@ export default function FichaItem() {
                     observacion: formAsignar.observacion || null,
                   });
                   await recargarFicha();
-                  toast("Asignado");
+                  toast("Asignado", "success");
                   setOpenAsignar(false);
                 } catch (e) {
                   console.error(e);
-                  alert("No se pudo asignar. Revisar Backend");
+                  toast("No se pudo asignar. Revisar Backend");
                 } finally {
                   setGuardando(false);
                 }
@@ -573,11 +564,11 @@ export default function FichaItem() {
                     observacion: formMover.observacion || null,
                   });
                   await recargarFicha();
-                  toast("Movido");
+                  toast("Movido", "success");
                   setOpenMover(false);
                 } catch (e) {
                   console.error(e);
-                  alert("No se pudo mover. Revisar Backend");
+                  toast("No se pudo mover. Revisar Backend");
                 } finally {
                   setGuardando(false);
                 }
@@ -652,11 +643,11 @@ export default function FichaItem() {
                     observacion: formEstado.observacion || null,
                   });
                   await recargarFicha();
-                  toast("Estado Actualizado");
+                  toast("Estado Actualizado", "success");
                   setOpenEstado(false);
                 } catch (e) {
                   console.error(e);
-                  alert("No se pudo cambiar estado. Revisar Backend");
+                  toast("No se pudo cambiar estado. Revisar Backend");
                 } finally {
                   setGuardando(false);
                 }
@@ -801,11 +792,11 @@ export default function FichaItem() {
                     });
 
                     await recargarFicha();
-                    toast("Datos actualizados");
+                    toast("Datos actualizados", "success");
                     setOpenEditDatos(false);
                   } catch (e) {
                     console.error(e);
-                    alert("No se pudo actualizar el ítem.");
+                    toast("No se pudo actualizar el ítem.");
                   } finally {
                     setGuardando(false);
                   }

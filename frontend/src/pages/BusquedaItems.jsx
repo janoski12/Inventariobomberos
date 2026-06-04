@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { buscarItems, exportarItems } from "../api/items";
 import { obtenerReportes } from "../api/reportes";
+import { useDialog } from "../context/DialogContext";
 import { listarBomberos } from "../api/bomberos";
 import { listarUbicaciones } from "../api/ubicaciones";
 import SearchBar from "../components/SearchBar";
@@ -27,6 +28,7 @@ export default function BusquedaItems() {
     const [cargando, setCargando]                 = useState(false);
     const [error, setError]                       = useState("");
     const [stats, setStats]                       = useState(null);
+    const { toast } = useDialog();
     const [exportando, setExportando]             = useState(false);
     const [bomberos, setBomberos]                 = useState([]);
     const [ubicaciones, setUbicaciones]           = useState([]);
@@ -204,7 +206,7 @@ export default function BusquedaItems() {
                         try {
                             setExportando(true);
                             await exportarItems({ q, estado: filtroEstado, categoria: filtroCategoria, criticidad: filtroCriticidad, bombero_id: filtroBombero, ubicacion_id: filtroUbicacion });
-                        } catch { alert("No se pudo exportar. Revisa que el backend esté activo."); }
+                        } catch { toast("No se pudo exportar. Revisa que el backend esté activo."); }
                         finally { setExportando(false); }
                     }}
                 >
