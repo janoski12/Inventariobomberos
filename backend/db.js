@@ -19,6 +19,9 @@ db.exec("PRAGMA foreign_keys = ON;");
 try { db.exec("ALTER TABLE item ADD COLUMN fecha_recepcion TEXT"); } catch {}
 try { db.exec("ALTER TABLE item ADD COLUMN fecha_vencimiento TEXT"); } catch {}
 
+// Migraciones: fecha fabricación en item
+try { db.exec("ALTER TABLE item ADD COLUMN fecha_fabricacion TEXT"); } catch {}
+
 // Migraciones: campos bombero
 try { db.exec("ALTER TABLE bombero ADD COLUMN rut TEXT"); } catch {}
 try { db.exec("ALTER TABLE bombero ADD COLUMN numero_registro TEXT"); } catch {}

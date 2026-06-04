@@ -233,15 +233,16 @@ app.get("/ubicaciones/:id", (req, res) => {
 //Crear items
 app.post("/items", (req, res) => {
     try {
-        const codigo = cleanText(req.body.codigo);
-        const categoria = cleanText(req.body.categoria);
-        const subcategoria = cleanText(req.body.subcategoria);
-        const descripcion = cleanText(req.body.descripcion);
-        const marca = cleanText(req.body.marca);
-        const modelo = cleanText(req.body.modelo);
-        const serie = cleanText(req.body.serie);
-        const estado = cleanText(req.body.estado) || "OPERATIVO";
-        const criticidad = cleanText(req.body.criticidad) || "MEDIA";
+        const codigo            = cleanText(req.body.codigo);
+        const categoria         = cleanText(req.body.categoria);
+        const subcategoria      = cleanText(req.body.subcategoria);
+        const descripcion       = cleanText(req.body.descripcion);
+        const marca             = cleanText(req.body.marca);
+        const modelo            = cleanText(req.body.modelo);
+        const serie             = cleanText(req.body.serie);
+        const estado            = cleanText(req.body.estado) || "OPERATIVO";
+        const criticidad        = cleanText(req.body.criticidad) || "MEDIA";
+        const fecha_fabricacion = cleanText(req.body.fecha_fabricacion);
 
         const ubicacion_actual_id = isNil(req.body.ubicacion_actual_id) ? null : Number(req.body.ubicacion_actual_id);
         const asignado_bombero_id = isNil(req.body.asignado_bombero_id) ? null : Number(req.body.asignado_bombero_id);
@@ -284,9 +285,9 @@ app.post("/items", (req, res) => {
 
         const nuevoId = db.transaction(() => {
             const info = db.prepare(`
-                INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id);
+                INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id, fecha_fabricacion)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id, fecha_fabricacion ?? null);
 
             const itemId = info.lastInsertRowid;
             const hacia = bombero

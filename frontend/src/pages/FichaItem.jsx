@@ -237,6 +237,12 @@ export default function FichaItem() {
           value={`${item.marca ?? "-"} / ${item.modelo ?? "-"}`}
         />
         <InfoRow label="Serie" value={item.serie ?? "-"} />
+        {item.fecha_fabricacion && (
+          <>
+            <InfoRow label="Fabricación"       value={item.fecha_fabricacion} />
+            <InfoRow label="Tiempo en servicio" value={tiempoEnServicio(item.fecha_fabricacion)} />
+          </>
+        )}
       </div>
 
       <h3 style={{ marginTop: 22 }}>Historial de movimientos</h3>
@@ -827,4 +833,16 @@ function InfoRow({ label, value }) {
       <div className="inforow-value">{value}</div>
     </div>
   );
+}
+
+function tiempoEnServicio(fechaStr) {
+  const inicio = new Date(fechaStr);
+  const hoy    = new Date();
+  let años  = hoy.getFullYear() - inicio.getFullYear();
+  let meses = hoy.getMonth()    - inicio.getMonth();
+  if (meses < 0) { años--; meses += 12; }
+  const partes = [];
+  if (años  > 0) partes.push(`${años} año${años  !== 1 ? "s" : ""}`);
+  if (meses > 0) partes.push(`${meses} mes${meses !== 1 ? "es" : ""}`);
+  return partes.length ? partes.join(", ") : "Menos de 1 mes";
 }

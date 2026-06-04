@@ -24,9 +24,10 @@ export default function NuevoItem() {
     marca: "",
     modelo: "",
     serie: "",
+    fecha_fabricacion: "",
     estado: "OPERATIVO",
     criticidad: "ALTA",
-    modo: "ASIGNAR", // ASIGNAR o UBICAR
+    modo: "ASIGNAR",
     bombero_id: "",
     ubicacion_id: "",
   });
@@ -172,9 +173,17 @@ export default function NuevoItem() {
             <input
               className="input"
               value={form.serie}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, serie: e.target.value }))
-              }
+              onChange={(e) => setForm((p) => ({ ...p, serie: e.target.value }))}
+            />
+          </label>
+
+          <label className="label">
+            Fecha de fabricación
+            <input
+              type="date"
+              className="input"
+              value={form.fecha_fabricacion}
+              onChange={(e) => setForm((p) => ({ ...p, fecha_fabricacion: e.target.value }))}
             />
           </label>
         </div>
@@ -264,6 +273,7 @@ export default function NuevoItem() {
                   marca: form.marca.trim() || null,
                   modelo: form.modelo.trim() || null,
                   serie: form.serie.trim() || null,
+                  fecha_fabricacion: form.fecha_fabricacion || null,
                   estado: form.estado,
                   criticidad: form.criticidad,
                   asignado_bombero_id:
