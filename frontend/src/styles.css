@@ -496,3 +496,67 @@ h1, h2, h3 { margin: 0; }
 .cs-option:hover        { background: rgba(255,255,255,0.06); color: var(--text); }
 .cs-option--active      { color: var(--text); font-weight: 600; }
 .cs-option--create      { color: var(--accent); border-top: 1px solid var(--border); font-weight: 600; }
+
+/* ===== DASHBOARD ===== */
+.dashboard {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    margin-bottom: 20px;
+}
+
+.dashboard-estados {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+.dashboard-stat {
+    flex: 1;
+    min-width: 80px;
+    text-align: center;
+    padding: 8px 6px;
+    border-radius: 8px;
+}
+.dashboard-stat--clickable {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.dashboard-stat--clickable:hover { background: rgba(255,255,255,0.05); }
+.dashboard-num   { display: block; font-size: 26px; font-weight: 800; line-height: 1; }
+.dashboard-label { display: block; font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.6px; margin-top: 3px; }
+
+.dashboard-alertas {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.dashboard-alerta {
+    flex: 1;
+    min-width: 120px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    text-decoration: none;
+    transition: border-color 0.15s, background 0.15s;
+}
+.dashboard-alerta:hover { background: rgba(255,255,255,0.05); border-color: #444; }
+.dashboard-alerta-num   { font-size: 20px; font-weight: 800; color: var(--text-faint); min-width: 24px; text-align: center; }
+.dashboard-alerta-label { font-size: 12px; color: var(--text-faint); }
+
+.dashboard-alerta--danger  { border-color: var(--c-fuera-servicio); background: rgba(239,83,80,0.08); }
+.dashboard-alerta--danger  .dashboard-alerta-num   { color: var(--c-fuera-servicio); }
+.dashboard-alerta--danger  .dashboard-alerta-label { color: var(--c-fuera-servicio); }
+.dashboard-alerta--warning { border-color: var(--c-mantencion); background: rgba(255,167,38,0.08); }
+.dashboard-alerta--warning .dashboard-alerta-num   { color: var(--c-mantencion); }
+.dashboard-alerta--warning .dashboard-alerta-label { color: var(--c-mantencion); }
+.dashboard-alerta--neutral { border-color: #555; }
+.dashboard-alerta--neutral .dashboard-alerta-num   { color: var(--text-dim); }
+.dashboard-alerta--neutral .dashboard-alerta-label { color: var(--text-dim); }

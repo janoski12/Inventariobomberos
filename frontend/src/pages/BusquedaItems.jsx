@@ -1,31 +1,41 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { buscarItems } from "../api/items";
+import { obtenerReportes } from "../api/reportes";
 import SearchBar from "../components/SearchBar";
 import ItemCard from "../components/ItemCard";
-import { useNavigate } from "react-router-dom";
 
 const ESTADOS    = ["OPERATIVO", "MANTENCION", "FUERA_SERVICIO", "BAJA"];
 const CATEGORIAS = ["EPP", "TRAUMA", "HERRAMIENTA", "COMUNICACION", "OTRO"];
 const CRITICIDADES = ["ALTA", "MEDIA", "BAJA"];
 
+const ESTADO_CLS = {
+    OPERATIVO:     "text-operativo",
+    MANTENCION:    "text-mantencion",
+    FUERA_SERVICIO:"text-fuera-servicio",
+    BAJA:          "text-baja-estado",
+};
+
 export default function BusquedaItems() {
-    const [q, setQ]                       = useState("");
+    const [q, setQ]                               = useState("");
     const [filtroEstado, setFiltroEstado]         = useState("");
     const [filtroCategoria, setFiltroCategoria]   = useState("");
     const [filtroCriticidad, setFiltroCriticidad] = useState("");
-
-    const [items, setItems]     = useState([]);
-    const [cargando, setCargando] = useState(false);
-    const [error, setError]     = useState("");
+    const [items, setItems]                       = useState([]);
+    const [cargando, setCargando]                 = useState(false);
+    const [error, setError]                       = useState("");
+    const [stats, setStats]                       = useState(null);
     const navigate = useNavigate();
 
     const debouncedQ = useDebounce(q, 300);
-
     const hayFiltros = filtroEstado || filtroCategoria || filtroCriticidad;
 
     useEffect(() => {
-        let cancelado = false;
+        obtenerReportes().then(setStats).catch(() => {});
+    }, []);
 
+    useEffect(() => {
+        let cancelado = false;
         async function run() {
             setError("");
             setCargando(true);
@@ -43,7 +53,6 @@ export default function BusquedaItems() {
                 if (!cancelado) setCargando(false);
             }
         }
-
         run();
         return () => { cancelado = true; };
     }, [debouncedQ, filtroEstado, filtroCategoria, filtroCriticidad]);
@@ -62,10 +71,58 @@ export default function BusquedaItems() {
         return `${items.length} resultado(s)`;
     }, [cargando, error, items.length, debouncedQ, hayFiltros]);
 
+    const total = stats ? stats.porEstado.reduce((s, r) => s + r.total, 0) : null;
+
     return (
         <div className="container">
-            <h2 style={{ marginTop: 0 }}>Busqueda de Items</h2>
 
+            {/* ── DASHBOARD ── */}
+            {stats && (
+                <div className="dashboard">
+                    {/* Fila de estado */}
+                    <div className="dashboard-estados">
+                        <div className="dashboard-stat">
+                            <span className="dashboard-num text-total">{total}</span>
+                            <span className="dashboard-label">Total</span>
+                        </div>
+                        {stats.porEstado.map(r => (
+                            <div
+                                key={r.estado}
+                                className="dashboard-stat dashboard-stat--clickable"
+                                onClick={() => setFiltroEstado(r.estado)}
+                                title={`Filtrar por ${r.estado}`}
+                            >
+                                <span className={`dashboard-num ${ESTADO_CLS[r.estado] ?? "text-total"}`}>{r.total}</span>
+                                <span className="dashboard-label">{r.estado.replace("_", " ")}</span>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Fila de alertas */}
+                    <div className="dashboard-alertas">
+                        <Link to="/reportes" className={`dashboard-alerta${stats.controlesVencidos.length > 0 ? " dashboard-alerta--danger" : ""}`}>
+                            <span className="dashboard-alerta-num">{stats.controlesVencidos.length}</span>
+                            <span className="dashboard-alerta-label">
+                                {stats.controlesVencidos.length === 1 ? "control vencido" : "controles vencidos"}
+                            </span>
+                        </Link>
+                        <Link to="/reportes" className={`dashboard-alerta${stats.proximosControles.length > 0 ? " dashboard-alerta--warning" : ""}`}>
+                            <span className="dashboard-alerta-num">{stats.proximosControles.length}</span>
+                            <span className="dashboard-alerta-label">
+                                {stats.proximosControles.length === 1 ? "control próximo" : "controles próximos"}
+                            </span>
+                        </Link>
+                        <Link to="/reportes" className={`dashboard-alerta${stats.sinUbicar.length > 0 ? " dashboard-alerta--neutral" : ""}`}>
+                            <span className="dashboard-alerta-num">{stats.sinUbicar.length}</span>
+                            <span className="dashboard-alerta-label">
+                                {stats.sinUbicar.length === 1 ? "ítem sin ubicar" : "ítems sin ubicar"}
+                            </span>
+                        </Link>
+                    </div>
+                </div>
+            )}
+
+            {/* ── BÚSQUEDA ── */}
             <SearchBar
                 value={q}
                 onChange={setQ}
@@ -126,11 +183,9 @@ export default function BusquedaItems() {
 
 function useDebounce(value, delayMs) {
     const [debounced, setDebounced] = useState(value);
-
     useEffect(() => {
         const t = setTimeout(() => setDebounced(value), delayMs);
         return () => clearTimeout(t);
     }, [value, delayMs]);
-
     return debounced;
 }
