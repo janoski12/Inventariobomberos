@@ -4,6 +4,7 @@ import BusquedaItems from './pages/BusquedaItems';
 import FichaItem from './pages/FichaItem';
 import NuevoItem from "./pages/NuevoItem";
 import Bomberos from "./pages/Bomberos";
+import FichaBombero from "./pages/FichaBombero";
 import Ubicaciones from "./pages/Ubicaciones";
 import Reportes from "./pages/Reportes";
 import Importar from "./pages/Importar";
@@ -23,6 +24,7 @@ function App() {
           <Route path="/items/nuevo" element={<NuevoItem />} />
           <Route path="/items/:id" element={<FichaItem />} />
           <Route path="/bomberos" element={<Bomberos />} />
+          <Route path="/bomberos/:id" element={<FichaBombero />} />
           <Route path="/ubicaciones" element={<Ubicaciones />} />
           <Route path="/reportes" element={<Reportes />} />
           <Route path="/importar" element={<Importar />} />

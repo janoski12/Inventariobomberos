@@ -246,6 +246,8 @@ h1, h2, h3 { margin: 0; }
 
 .clickable { cursor: pointer; }
 .clickable:hover { filter: brightness(1.07); }
+.bombero-link { color: var(--text); font-weight: 700; font-size: 15px; text-decoration: none; }
+.bombero-link:hover { color: var(--accent); }
 
 .section-title { font-weight: 700; color: var(--text); margin: 0; }
 

@@ -15,8 +15,16 @@ db.exec(schema);
 
 db.exec("PRAGMA foreign_keys = ON;");
 
-// Migraciones: columnas trauma (seguro si ya existen)
+// Migraciones: columnas trauma
 try { db.exec("ALTER TABLE item ADD COLUMN fecha_recepcion TEXT"); } catch {}
 try { db.exec("ALTER TABLE item ADD COLUMN fecha_vencimiento TEXT"); } catch {}
+
+// Migraciones: campos bombero
+try { db.exec("ALTER TABLE bombero ADD COLUMN rut TEXT"); } catch {}
+try { db.exec("ALTER TABLE bombero ADD COLUMN numero_registro TEXT"); } catch {}
+try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_bombero_rut ON bombero(rut) WHERE rut IS NOT NULL"); } catch {}
+try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_bombero_registro ON bombero(numero_registro) WHERE numero_registro IS NOT NULL"); } catch {}
+// Normalizar estados existentes a uppercase
+try { db.exec("UPDATE bombero SET estado = UPPER(estado) WHERE estado != UPPER(estado)"); } catch {}
 
 module.exports = db;

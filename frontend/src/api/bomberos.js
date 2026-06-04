@@ -29,3 +29,7 @@ export function actualizarBombero(id, payload) {
 export function eliminarBombero(id) {
   return request(`${API_URL}/bomberos/${id}`, { method: "DELETE" });
 }
+
+export function obtenerBombero(id) {
+  return request(`${API_URL}/bomberos/${id}`);
+}
