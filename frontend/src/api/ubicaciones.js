@@ -29,3 +29,7 @@ export function actualizarUbicacion(id, payload) {
 export function eliminarUbicacion(id) {
   return request(`${API_URL}/ubicaciones/${id}`, { method: "DELETE" });
 }
+
+export function obtenerUbicacion(id) {
+  return request(`${API_URL}/ubicaciones/${id}`);
+}

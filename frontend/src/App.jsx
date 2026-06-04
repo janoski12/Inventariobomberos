@@ -6,6 +6,7 @@ import NuevoItem from "./pages/NuevoItem";
 import Bomberos from "./pages/Bomberos";
 import FichaBombero from "./pages/FichaBombero";
 import Ubicaciones from "./pages/Ubicaciones";
+import FichaUbicacion from "./pages/FichaUbicacion";
 import Reportes from "./pages/Reportes";
 import Importar from "./pages/Importar";
 import Trauma from "./pages/Trauma";
@@ -26,6 +27,7 @@ function App() {
           <Route path="/bomberos" element={<Bomberos />} />
           <Route path="/bomberos/:id" element={<FichaBombero />} />
           <Route path="/ubicaciones" element={<Ubicaciones />} />
+          <Route path="/ubicaciones/:id" element={<FichaUbicacion />} />
           <Route path="/reportes" element={<Reportes />} />
           <Route path="/importar" element={<Importar />} />
           <Route path="/trauma" element={<Trauma />} />

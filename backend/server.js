@@ -211,11 +211,23 @@ app.put("/ubicaciones/:id", (req, res) => {
 
 //Listar ubicaciones
 app.get("/ubicaciones", (req, res) => {
-    const rows = db.prepare(`
-        SELECT * FROM ubicacion WHERE activo=1 ORDER BY nombre    
-    `).all();
-
+    const rows = db.prepare("SELECT * FROM ubicacion WHERE activo=1 ORDER BY nombre").all();
     res.json(rows);
+});
+
+// Ficha de ubicación con sus ítems
+app.get("/ubicaciones/:id", (req, res) => {
+    const id = Number(req.params.id);
+    const ubicacion = db.prepare("SELECT * FROM ubicacion WHERE id=?").get(id);
+    if (!ubicacion) return notFound(res, "Ubicación no encontrada");
+
+    const items = db.prepare(`
+        SELECT id, codigo, descripcion, categoria, subcategoria, estado, criticidad, marca, modelo
+        FROM item WHERE ubicacion_actual_id = ?
+        ORDER BY codigo
+    `).all(id);
+
+    res.json({ ...ubicacion, items });
 });
 
 //Crear items

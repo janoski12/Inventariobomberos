@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { actualizarUbicacion, crearUbicacion, eliminarUbicacion, listarUbicaciones } from "../api/ubicaciones";
 import Modal from "../components/Modal";
+
+const TIPOS = ["BODEGA", "SALA", "SALON", "CONTAINER", "CARRO", "CASILLERO", "OTRO"];
 
 export default function Ubicaciones() {
   const [lista, setLista] = useState([]);
@@ -66,11 +69,7 @@ export default function Ubicaciones() {
               value={form.tipo}
               onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))}
             >
-              <option value="BODEGA">BODEGA</option>
-              <option value="SALA">SALA</option>
-              <option value="CARRO">CARRO</option>
-              <option value="CASILLERO">CASILLERO</option>
-              <option value="OTRO">OTRO</option>
+              {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </label>
 
@@ -165,11 +164,16 @@ export default function Ubicaciones() {
           <div key={u.id} className="card">
             <div className="spread">
               <div>
-                <div className="card-title">{u.nombre}</div>
-                <div className="card-muted" style={{ marginTop: 6 }}>
-                  Tipo: {u.tipo ?? "-"} • Activo: {u.activo ? "Sí" : "No"}
-                  {u.responsable ? ` • Resp: ${u.responsable}` : ""}
-                  {u.codigo_qr ? ` • QR: ${u.codigo_qr}` : ""}
+                <div className="spread" style={{ gap: 10, justifyContent: "flex-start" }}>
+                  <Link to={`/ubicaciones/${u.id}`} className="bombero-link">{u.nombre}</Link>
+                  <span className={u.activo ? "chip chip--operativo" : "chip chip--baja"}>
+                    {u.activo ? "ACTIVA" : "INACTIVA"}
+                  </span>
+                </div>
+                <div className="card-muted" style={{ marginTop: 4 }}>
+                  {u.tipo ?? "-"}
+                  {u.responsable ? ` · Resp: ${u.responsable}` : ""}
+                  {u.codigo_qr ? ` · QR: ${u.codigo_qr}` : ""}
                 </div>
               </div>
 
@@ -234,11 +238,7 @@ export default function Ubicaciones() {
                 value={edit.tipo}
                 onChange={(e) => setEdit((p) => ({ ...p, tipo: e.target.value }))}
               >
-                <option value="BODEGA">BODEGA</option>
-                <option value="SALA">SALA</option>
-                <option value="CARRO">CARRO</option>
-                <option value="CASILLERO">CASILLERO</option>
-                <option value="OTRO">OTRO</option>
+                {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </label>
 
