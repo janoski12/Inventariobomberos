@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { buscarItems } from "../api/items";
+import { buscarItems, exportarItems } from "../api/items";
 import { obtenerReportes } from "../api/reportes";
 import SearchBar from "../components/SearchBar";
 import ItemCard from "../components/ItemCard";
@@ -25,6 +25,7 @@ export default function BusquedaItems() {
     const [cargando, setCargando]                 = useState(false);
     const [error, setError]                       = useState("");
     const [stats, setStats]                       = useState(null);
+    const [exportando, setExportando]             = useState(false);
     const navigate = useNavigate();
 
     const debouncedQ = useDebounce(q, 300);
@@ -164,8 +165,21 @@ export default function BusquedaItems() {
                 )}
             </div>
 
-            <div className={error ? "error" : "muted"} style={{ marginTop: 10 }}>
-                {resumen}
+            <div className="spread" style={{ marginTop: 10 }}>
+                <div className={error ? "error" : "muted"}>{resumen}</div>
+                <button
+                    className="btn-light"
+                    disabled={exportando || items.length === 0}
+                    onClick={async () => {
+                        try {
+                            setExportando(true);
+                            await exportarItems({ q, estado: filtroEstado, categoria: filtroCategoria, criticidad: filtroCriticidad });
+                        } catch { alert("No se pudo exportar. Revisa que el backend esté activo."); }
+                        finally { setExportando(false); }
+                    }}
+                >
+                    {exportando ? "Exportando..." : "Exportar Excel"}
+                </button>
             </div>
 
             <div className="stack" style={{ marginTop: 14 }}>

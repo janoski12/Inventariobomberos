@@ -56,6 +56,24 @@ export function eliminarItem(id) {
   return request(`${API_URL}/items/${id}`, { method: "DELETE" });
 }
 
+export async function exportarItems({ q = "", estado = "", categoria = "", criticidad = "" } = {}) {
+  const params = new URLSearchParams();
+  if (q?.trim())    params.set("q",          q.trim());
+  if (estado)       params.set("estado",      estado);
+  if (categoria)    params.set("categoria",   categoria);
+  if (criticidad)   params.set("criticidad",  criticidad);
+  const qs = params.toString();
+  const res = await fetch(`${API_URL}/items/exportar${qs ? `?${qs}` : ""}`);
+  if (!res.ok) throw new Error(`Error ${res.status}`);
+  const blob = await res.blob();
+  const fecha = new Date().toISOString().slice(0, 10);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `inventario_${fecha}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 export function obtenerSubcategorias(categoria) {
   const qs = categoria ? `?categoria=${encodeURIComponent(categoria)}` : "";
   return request(`${API_URL}/items/meta/subcategorias${qs}`);

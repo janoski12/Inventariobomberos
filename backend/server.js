@@ -443,6 +443,61 @@ app.get("/items/:id/movimientos", (req, res) => {
 
 });
 
+// Exportar inventario filtrado a Excel
+app.get("/items/exportar", (req, res) => {
+    try {
+        const xlsx = require("xlsx");
+        const q          = (req.query.q         ?? "").trim();
+        const estado     = (req.query.estado    ?? "").trim();
+        const categoria  = (req.query.categoria ?? "").trim();
+        const criticidad = (req.query.criticidad ?? "").trim();
+
+        const conditions = [], params = [];
+        if (q)          { conditions.push("(i.codigo LIKE ? OR i.descripcion LIKE ?)"); params.push(`%${q}%`, `%${q}%`); }
+        if (estado)     { conditions.push("i.estado = ?");     params.push(estado); }
+        if (categoria)  { conditions.push("i.categoria = ?");  params.push(categoria); }
+        if (criticidad) { conditions.push("i.criticidad = ?"); params.push(criticidad); }
+
+        const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+        const rows = db.prepare(`
+            SELECT i.codigo, i.descripcion, i.categoria, i.subcategoria, i.estado, i.criticidad,
+                   i.marca, i.modelo, i.serie,
+                   b.nombre AS asignado_a, u.nombre AS ubicacion,
+                   i.fecha_recepcion, i.fecha_vencimiento
+            FROM item i
+            LEFT JOIN ubicacion u ON u.id = i.ubicacion_actual_id
+            LEFT JOIN bombero   b ON b.id = i.asignado_bombero_id
+            ${where}
+            ORDER BY i.codigo
+        `).all(...params);
+
+        const datos = rows.map(r => ({
+            "Código":           r.codigo,
+            "Descripción":      r.descripcion,
+            "Categoría":        r.categoria,
+            "Subcategoría":     r.subcategoria ?? "",
+            "Estado":           r.estado,
+            "Criticidad":       r.criticidad,
+            "Marca":            r.marca ?? "",
+            "Modelo":           r.modelo ?? "",
+            "Serie":            r.serie ?? "",
+            "Asignado a":       r.asignado_a ?? "",
+            "Ubicación":        r.ubicacion ?? "",
+            "Fecha Recepción":  r.fecha_recepcion ?? "",
+            "Fecha Vencimiento":r.fecha_vencimiento ?? "",
+        }));
+
+        const wb = xlsx.utils.book_new();
+        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet(datos), "Inventario");
+        const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+
+        const fecha = new Date().toISOString().slice(0, 10);
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", `attachment; filename="inventario_${fecha}.xlsx"`);
+        res.send(buf);
+    } catch (e) { return serverError(res, e, "Error exportando inventario"); }
+});
+
 // Metadatos para dropdowns creativos
 app.get("/items/meta/subcategorias", (req, res) => {
     const { categoria } = req.query;
