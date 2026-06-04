@@ -474,23 +474,16 @@ app.post("/items/:id/asignar", (req, res) => {
         const bombero = db.prepare("SELECT * FROM bombero WHERE id=?").get(bombero_id);
         if (!bombero) return notFound(res, "Bombero no encontrado");
 
-        const trx = db.transaction(() => {
-            //update 
-            db.prepare(`UPDATE item SET asignado_bombero_id=?, ubicacion_actual_id=NULL, actualizado_en=datetime('now') WHERE id=?`).run(bombero_id, id);
+        const desdeAsignar = item.asignado_bombero_id
+            ? `Asignado a ${db.prepare("SELECT nombre FROM bombero WHERE id=?").get(item.asignado_bombero_id)?.nombre ?? "Bombero desconocido"}`
+            : item.ubicacion_actual_id
+                ? `Ubicado en ${db.prepare("SELECT nombre FROM ubicacion WHERE id=?").get(item.ubicacion_actual_id)?.nombre ?? "Ubicación desconocida"}`
+                : "Sin asignación";
 
-            //movimiento
+        const trx = db.transaction(() => {
+            db.prepare(`UPDATE item SET asignado_bombero_id=?, ubicacion_actual_id=NULL, actualizado_en=datetime('now') WHERE id=?`).run(bombero_id, id);
             db.prepare(`INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion) VALUES (?, 'ASIGNACION', ?, ?, ?, ?)`)
-                .run(
-                    id,
-                    item.asignado_bombero_id
-                        ? `Bombero ID ${item.asignado_bombero_id}`
-                        : item.ubicacion_actual_id
-                            ? `Ubicacion ID ${item.ubicacion_actual_id}`
-                            : "Sin ubicacion",
-                    `Asignado a Bombero ${bombero.nombre}`,
-                    responsable,
-                    observacion ?? null
-                );
+                .run(id, desdeAsignar, `Asignado a ${bombero.nombre}`, responsable, observacion ?? null);
         });
 
         trx();
@@ -518,23 +511,16 @@ app.post("/items/:id/mover", (req, res) => {
         const ubicacion = db.prepare("SELECT * FROM ubicacion WHERE id=?").get(ubicacion_id);
         if (!ubicacion) return notFound(res, "Ubicacion no encontrada");
 
-        const trx = db.transaction(() => {
-            //update
-            db.prepare(`UPDATE item SET ubicacion_actual_id=?, asignado_bombero_id=NULL, actualizado_en=datetime('now') WHERE id=?`).run(ubicacion_id, id);
+        const desdeMover = item.asignado_bombero_id
+            ? `Asignado a ${db.prepare("SELECT nombre FROM bombero WHERE id=?").get(item.asignado_bombero_id)?.nombre ?? "Bombero desconocido"}`
+            : item.ubicacion_actual_id
+                ? `Ubicado en ${db.prepare("SELECT nombre FROM ubicacion WHERE id=?").get(item.ubicacion_actual_id)?.nombre ?? "Ubicación desconocida"}`
+                : "Sin asignación";
 
-            //movimiento
+        const trx = db.transaction(() => {
+            db.prepare(`UPDATE item SET ubicacion_actual_id=?, asignado_bombero_id=NULL, actualizado_en=datetime('now') WHERE id=?`).run(ubicacion_id, id);
             db.prepare(`INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion) VALUES (?, 'MOVIMIENTO', ?, ?, ?, ?)`)
-                .run(
-                    id,
-                    item.asignado_bombero_id
-                        ? `Bombero ID ${item.asignado_bombero_id}`
-                        : item.ubicacion_actual_id
-                            ? `Ubicacion ID ${item.ubicacion_actual_id}`
-                            : "Sin ubicacion",
-                    `Movido a Ubicacion ${ubicacion.nombre}`,
-                    responsable,
-                    observacion
-                );
+                .run(id, desdeMover, `Ubicado en ${ubicacion.nombre}`, responsable, observacion);
         });
 
         trx();
