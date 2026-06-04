@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { buscarItems, exportarItems } from "../api/items";
 import { obtenerReportes } from "../api/reportes";
+import { listarBomberos } from "../api/bomberos";
+import { listarUbicaciones } from "../api/ubicaciones";
 import SearchBar from "../components/SearchBar";
 import ItemCard from "../components/ItemCard";
 
@@ -26,13 +28,19 @@ export default function BusquedaItems() {
     const [error, setError]                       = useState("");
     const [stats, setStats]                       = useState(null);
     const [exportando, setExportando]             = useState(false);
+    const [bomberos, setBomberos]                 = useState([]);
+    const [ubicaciones, setUbicaciones]           = useState([]);
+    const [filtroBombero, setFiltroBombero]       = useState("");
+    const [filtroUbicacion, setFiltroUbicacion]   = useState("");
     const navigate = useNavigate();
 
     const debouncedQ = useDebounce(q, 300);
-    const hayFiltros = filtroEstado || filtroCategoria || filtroCriticidad;
+    const hayFiltros = filtroEstado || filtroCategoria || filtroCriticidad || filtroBombero || filtroUbicacion;
 
     useEffect(() => {
         obtenerReportes().then(setStats).catch(() => {});
+        listarBomberos().then(setBomberos).catch(() => {});
+        listarUbicaciones().then(setUbicaciones).catch(() => {});
     }, []);
 
     useEffect(() => {
@@ -42,10 +50,12 @@ export default function BusquedaItems() {
             setCargando(true);
             try {
                 const data = await buscarItems({
-                    q: debouncedQ,
-                    estado:     filtroEstado,
-                    categoria:  filtroCategoria,
-                    criticidad: filtroCriticidad,
+                    q:           debouncedQ,
+                    estado:      filtroEstado,
+                    categoria:   filtroCategoria,
+                    criticidad:  filtroCriticidad,
+                    bombero_id:  filtroBombero,
+                    ubicacion_id:filtroUbicacion,
                 });
                 if (!cancelado) setItems(data);
             } catch {
@@ -56,12 +66,14 @@ export default function BusquedaItems() {
         }
         run();
         return () => { cancelado = true; };
-    }, [debouncedQ, filtroEstado, filtroCategoria, filtroCriticidad]);
+    }, [debouncedQ, filtroEstado, filtroCategoria, filtroCriticidad, filtroBombero, filtroUbicacion]);
 
     function limpiarFiltros() {
         setFiltroEstado("");
         setFiltroCategoria("");
         setFiltroCriticidad("");
+        setFiltroBombero("");
+        setFiltroUbicacion("");
     }
 
     const resumen = useMemo(() => {
@@ -158,6 +170,24 @@ export default function BusquedaItems() {
                     {CRITICIDADES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
 
+                <select
+                    className={`filtro-select${filtroBombero ? " filtro-activo" : ""}`}
+                    value={filtroBombero}
+                    onChange={(e) => { setFiltroBombero(e.target.value); setFiltroUbicacion(""); }}
+                >
+                    <option value="">Todos los bomberos</option>
+                    {bomberos.map(b => <option key={b.id} value={b.id}>{b.nombre}</option>)}
+                </select>
+
+                <select
+                    className={`filtro-select${filtroUbicacion ? " filtro-activo" : ""}`}
+                    value={filtroUbicacion}
+                    onChange={(e) => { setFiltroUbicacion(e.target.value); setFiltroBombero(""); }}
+                >
+                    <option value="">Todas las ubicaciones</option>
+                    {ubicaciones.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+                </select>
+
                 {hayFiltros && (
                     <button className="btn-clear-filtros" onClick={limpiarFiltros}>
                         Limpiar filtros
@@ -173,7 +203,7 @@ export default function BusquedaItems() {
                     onClick={async () => {
                         try {
                             setExportando(true);
-                            await exportarItems({ q, estado: filtroEstado, categoria: filtroCategoria, criticidad: filtroCriticidad });
+                            await exportarItems({ q, estado: filtroEstado, categoria: filtroCategoria, criticidad: filtroCriticidad, bombero_id: filtroBombero, ubicacion_id: filtroUbicacion });
                         } catch { alert("No se pudo exportar. Revisa que el backend esté activo."); }
                         finally { setExportando(false); }
                     }}

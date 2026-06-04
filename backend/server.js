@@ -315,10 +315,12 @@ app.post("/items", (req, res) => {
 
 // Buscar items (por código o descripción, con filtros opcionales)
 app.get("/items", (req, res) => {
-  const q          = (req.query.q         ?? "").trim();
-  const estado     = (req.query.estado    ?? "").trim();
-  const categoria  = (req.query.categoria ?? "").trim();
-  const criticidad = (req.query.criticidad ?? "").trim();
+  const q           = (req.query.q          ?? "").trim();
+  const estado      = (req.query.estado     ?? "").trim();
+  const categoria   = (req.query.categoria  ?? "").trim();
+  const criticidad  = (req.query.criticidad ?? "").trim();
+  const bombero_id  = req.query.bombero_id  ? Number(req.query.bombero_id)  : null;
+  const ubicacion_id= req.query.ubicacion_id? Number(req.query.ubicacion_id): null;
 
   if (estado     && !ESTADOS_ITEM.includes(estado))
     return badRequest(res, `estado inválido. Use: ${ESTADOS_ITEM.join(", ")}`);
@@ -328,29 +330,25 @@ app.get("/items", (req, res) => {
     return badRequest(res, `criticidad inválida. Use: ${CRITICIDADES.join(", ")}`);
 
   const baseSelect = `
-    SELECT
-        i.*,
-        u.nombre AS ubicacion_nombre,
-        b.nombre AS bombero_nombre
+    SELECT i.*, u.nombre AS ubicacion_nombre, b.nombre AS bombero_nombre
     FROM item i
     LEFT JOIN ubicacion u ON u.id = i.ubicacion_actual_id
-    LEFT JOIN bombero b ON b.id = i.asignado_bombero_id
+    LEFT JOIN bombero   b ON b.id = i.asignado_bombero_id
   `;
 
   const conditions = [];
   const params     = [];
 
-  if (q) {
-    conditions.push("(i.codigo LIKE ? OR i.descripcion LIKE ?)");
-    params.push(`%${q}%`, `%${q}%`);
-  }
-  if (estado)     { conditions.push("i.estado = ?");     params.push(estado); }
-  if (categoria)  { conditions.push("i.categoria = ?");  params.push(categoria); }
-  if (criticidad) { conditions.push("i.criticidad = ?"); params.push(criticidad); }
+  if (q)           { conditions.push("(i.codigo LIKE ? OR i.descripcion LIKE ?)"); params.push(`%${q}%`, `%${q}%`); }
+  if (estado)      { conditions.push("i.estado = ?");               params.push(estado); }
+  if (categoria)   { conditions.push("i.categoria = ?");            params.push(categoria); }
+  if (criticidad)  { conditions.push("i.criticidad = ?");           params.push(criticidad); }
+  if (bombero_id)  { conditions.push("i.asignado_bombero_id = ?");  params.push(bombero_id); }
+  if (ubicacion_id){ conditions.push("i.ubicacion_actual_id = ?");  params.push(ubicacion_id); }
 
-  const where  = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-  const order  = q ? "ORDER BY i.codigo" : "ORDER BY i.id DESC";
-  const limit  = q ? 200 : 50;
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const order = q ? "ORDER BY i.codigo" : "ORDER BY i.id DESC";
+  const limit = (q || conditions.length) ? 500 : 50;
 
   const rows = db.prepare(`${baseSelect} ${where} ${order} LIMIT ${limit}`).all(...params);
   res.json(rows);
@@ -448,16 +446,20 @@ app.get("/items/:id/movimientos", (req, res) => {
 app.get("/items/exportar", (req, res) => {
     try {
         const xlsx = require("xlsx");
-        const q          = (req.query.q         ?? "").trim();
-        const estado     = (req.query.estado    ?? "").trim();
-        const categoria  = (req.query.categoria ?? "").trim();
-        const criticidad = (req.query.criticidad ?? "").trim();
+        const q            = (req.query.q          ?? "").trim();
+        const estado       = (req.query.estado     ?? "").trim();
+        const categoria    = (req.query.categoria  ?? "").trim();
+        const criticidad   = (req.query.criticidad ?? "").trim();
+        const bombero_id   = req.query.bombero_id  ? Number(req.query.bombero_id)  : null;
+        const ubicacion_id = req.query.ubicacion_id? Number(req.query.ubicacion_id): null;
 
         const conditions = [], params = [];
-        if (q)          { conditions.push("(i.codigo LIKE ? OR i.descripcion LIKE ?)"); params.push(`%${q}%`, `%${q}%`); }
-        if (estado)     { conditions.push("i.estado = ?");     params.push(estado); }
-        if (categoria)  { conditions.push("i.categoria = ?");  params.push(categoria); }
-        if (criticidad) { conditions.push("i.criticidad = ?"); params.push(criticidad); }
+        if (q)           { conditions.push("(i.codigo LIKE ? OR i.descripcion LIKE ?)"); params.push(`%${q}%`, `%${q}%`); }
+        if (estado)      { conditions.push("i.estado = ?");               params.push(estado); }
+        if (categoria)   { conditions.push("i.categoria = ?");            params.push(categoria); }
+        if (criticidad)  { conditions.push("i.criticidad = ?");           params.push(criticidad); }
+        if (bombero_id)  { conditions.push("i.asignado_bombero_id = ?");  params.push(bombero_id); }
+        if (ubicacion_id){ conditions.push("i.ubicacion_actual_id = ?");  params.push(ubicacion_id); }
 
         const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
         const rows = db.prepare(`
