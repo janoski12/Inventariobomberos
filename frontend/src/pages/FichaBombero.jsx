@@ -21,11 +21,14 @@ export default function FichaBombero() {
   const [error, setError]     = useState("");
 
   useEffect(() => {
-    setCargando(true);
-    obtenerBombero(id)
-      .then(setBombero)
-      .catch(() => setError("No se pudo cargar la ficha del bombero."))
-      .finally(() => setCargando(false));
+    async function cargar() {
+      setCargando(true);
+      setError("");
+      try { setBombero(await obtenerBombero(id)); }
+      catch { setError("No se pudo cargar la ficha del bombero."); }
+      finally { setCargando(false); }
+    }
+    cargar();
   }, [id]);
 
   if (cargando) return <div className="container"><p className="muted">Cargando...</p></div>;

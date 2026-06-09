@@ -21,11 +21,14 @@ export default function FichaUbicacion() {
   const [error, setError]         = useState("");
 
   useEffect(() => {
-    setCargando(true);
-    obtenerUbicacion(id)
-      .then(setUbicacion)
-      .catch(() => setError("No se pudo cargar la ficha de la ubicación."))
-      .finally(() => setCargando(false));
+    async function cargar() {
+      setCargando(true);
+      setError("");
+      try { setUbicacion(await obtenerUbicacion(id)); }
+      catch { setError("No se pudo cargar la ficha de la ubicación."); }
+      finally { setCargando(false); }
+    }
+    cargar();
   }, [id]);
 
   if (cargando) return <div className="container"><p className="muted">Cargando...</p></div>;
