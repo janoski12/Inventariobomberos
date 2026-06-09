@@ -148,9 +148,9 @@ export default function Importar() {
         />
         <SeccionParcial
           titulo="Ítems"
-          descripcion="Upsert por código. Incluye hoja Controles (opcional, siempre aditiva)."
+          descripcion="Upsert por código. Incluye fechas (fabricación, recepción, vencimiento) y hoja Controles (opcional, siempre aditiva)."
           seccion="items"
-          nota="Los bomberos y ubicaciones referenciados deben existir en el sistema antes de importar."
+          nota="Los bomberos y ubicaciones referenciados deben existir en el sistema antes de importar. Las fechas aceptan formato AAAA-MM-DD o DD/MM/AAAA; si vienen vacías no borran las existentes."
         />
       </div>
     </div>

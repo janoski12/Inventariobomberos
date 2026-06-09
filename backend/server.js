@@ -712,7 +712,7 @@ app.post("/importar", upload.single("archivo"), (req, res) => {
 
         const insUbicacion = db.prepare(`INSERT INTO ubicacion (nombre, tipo, responsable, codigo_qr, activo) VALUES (?, ?, ?, ?, ?)`);
         const insBombero   = db.prepare(`INSERT INTO bombero (nombre, cargo, estado, observaciones) VALUES (?, ?, ?, ?)`);
-        const insItem      = db.prepare(`INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        const insItem      = db.prepare(`INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id, fecha_fabricacion, fecha_recepcion, fecha_vencimiento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         const insControl   = db.prepare(`INSERT INTO control (item_id, tipo, fecha_objetivo, fecha_real, resultado, observacion) VALUES (?, ?, ?, ?, ?, ?)`);
         const insMov       = db.prepare(`INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`);
 
@@ -751,7 +751,7 @@ app.post("/importar", upload.single("archivo"), (req, res) => {
                 if (ubicNombre && bomNombre) throw new Error(`Ítem "${codigo}": no puede tener ubicación y bombero simultáneamente`);
                 const ubicId = ubicNombre ? ubicMap.get(ubicNombre) ?? (() => { throw new Error(`Ítem "${codigo}": ubicación no encontrada "${ubicNombre}"`); })() : null;
                 const bomId  = bomNombre  ? bomMap.get(bomNombre)   ?? (() => { throw new Error(`Ítem "${codigo}": bombero no encontrado "${bomNombre}"`);   })() : null;
-                insItem.run(codigo, categoria, norm(it.subcategoria) || null, norm(it.descripcion) || codigo, norm(it.marca) || null, norm(it.modelo) || null, norm(it.serie) || null, estado, criticidad, ubicId, bomId);
+                insItem.run(codigo, categoria, norm(it.subcategoria) || null, norm(it.descripcion) || codigo, norm(it.marca) || null, norm(it.modelo) || null, norm(it.serie) || null, estado, criticidad, ubicId, bomId, normFechaXlsx(it.fecha_fabricacion), normFechaXlsx(it.fecha_recepcion), normFechaXlsx(it.fecha_vencimiento));
             }
 
             const itemMap = new Map();
@@ -800,10 +800,10 @@ app.get("/plantilla", (_req, res) => {
             { nombre: "Sala Trauma",      tipo: "SALA",      responsable: "", codigo_qr: "", activo: 1 },
         ];
         const items = [
-            { codigo: "EPP-0001", categoria: "EPP",          subcategoria: "Casco",    descripcion: "Casco Estructural",      marca: "Bullard",  modelo: "FH2",    serie: "SN-001", estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "",               bombero_nombre: "Juan Pérez" },
-            { codigo: "TRM-0001", categoria: "TRAUMA",       subcategoria: "Botiquín", descripcion: "Botiquín Trauma Tipo A", marca: "",         modelo: "",       serie: "",        estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "Sala Trauma",    bombero_nombre: "" },
-            { codigo: "HRR-0001", categoria: "HERRAMIENTA",  subcategoria: "Corte",    descripcion: "Amoladora Angular 9\"", marca: "Makita",   modelo: "GA9020", serie: "MK-123",  estado: "MANTENCION",criticidad: "MEDIA", ubicacion_nombre: "Bodega Principal", bombero_nombre: "" },
-            { codigo: "COM-0001", categoria: "COMUNICACION", subcategoria: "Radio",    descripcion: "Radio Portátil VHF",    marca: "Motorola", modelo: "DP4400", serie: "MOT-007", estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "Carro 1",        bombero_nombre: "" },
+            { codigo: "EPP-0001", categoria: "EPP",          subcategoria: "Casco",    descripcion: "Casco Estructural",      marca: "Bullard",  modelo: "FH2",    serie: "SN-001", estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "",               bombero_nombre: "Juan Pérez", fecha_fabricacion: "2022-01-15", fecha_recepcion: "",           fecha_vencimiento: "" },
+            { codigo: "TRM-0001", categoria: "TRAUMA",       subcategoria: "Botiquín", descripcion: "Botiquín Trauma Tipo A", marca: "",         modelo: "",       serie: "",        estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "Sala Trauma",    bombero_nombre: "",           fecha_fabricacion: "",           fecha_recepcion: "2025-01-10", fecha_vencimiento: "2027-01-10" },
+            { codigo: "HRR-0001", categoria: "HERRAMIENTA",  subcategoria: "Corte",    descripcion: "Amoladora Angular 9\"", marca: "Makita",   modelo: "GA9020", serie: "MK-123",  estado: "MANTENCION",criticidad: "MEDIA", ubicacion_nombre: "Bodega Principal", bombero_nombre: "",         fecha_fabricacion: "",           fecha_recepcion: "",           fecha_vencimiento: "" },
+            { codigo: "COM-0001", categoria: "COMUNICACION", subcategoria: "Radio",    descripcion: "Radio Portátil VHF",    marca: "Motorola", modelo: "DP4400", serie: "MOT-007", estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "Carro 1",        bombero_nombre: "",           fecha_fabricacion: "",           fecha_recepcion: "",           fecha_vencimiento: "" },
         ];
         const controles = [
             { codigo_item: "EPP-0001", tipo: "INSPECCION",    fecha_objetivo: "2025-06-01", fecha_real: "",           resultado: "",         observacion: "Inspección anual" },
@@ -1138,6 +1138,24 @@ function normXlsx(v) {
     return String(v).trim();
 }
 
+// Normaliza una celda de fecha de Excel a "YYYY-MM-DD" (o null).
+// Acepta numeros de serie de Excel, objetos Date, "YYYY-MM-DD" y "DD/MM/YYYY".
+function normFechaXlsx(v) {
+    if (v === undefined || v === null || v === "") return null;
+    if (typeof v === "number" && Number.isFinite(v)) {
+        const d = new Date(Math.round((v - 25569) * 86400000));
+        return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+    }
+    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    const s = String(v).trim();
+    if (!s) return null;
+    let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+    m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+    return null;
+}
+
 // Plantilla parcial — Ubicaciones
 app.get("/plantilla/ubicaciones", (_req, res) => {
     try {
@@ -1178,9 +1196,9 @@ app.get("/plantilla/items", (_req, res) => {
     try {
         const xlsx = require("xlsx");
         const items = [
-            { codigo: "EPP-0001", categoria: "EPP",         subcategoria: "Casco",    descripcion: "Casco Estructural",      marca: "Bullard",  modelo: "FH2",    serie: "SN-001", estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "",             bombero_nombre: "Juan Pérez" },
-            { codigo: "TRM-0001", categoria: "TRAUMA",      subcategoria: "Botiquín", descripcion: "Botiquín Trauma Tipo A", marca: "",         modelo: "",       serie: "",        estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "Sala Trauma",  bombero_nombre: "" },
-            { codigo: "HRR-0001", categoria: "HERRAMIENTA", subcategoria: "Corte",    descripcion: "Amoladora Angular 9\"", marca: "Makita",   modelo: "GA9020", serie: "MK-123",  estado: "MANTENCION",criticidad: "MEDIA", ubicacion_nombre: "Bodega Principal", bombero_nombre: "" },
+            { codigo: "EPP-0001", categoria: "EPP",         subcategoria: "Casco",    descripcion: "Casco Estructural",      marca: "Bullard",  modelo: "FH2",    serie: "SN-001", estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "",             bombero_nombre: "Juan Pérez", fecha_fabricacion: "2022-01-15", fecha_recepcion: "",           fecha_vencimiento: "" },
+            { codigo: "TRM-0001", categoria: "TRAUMA",      subcategoria: "Botiquín", descripcion: "Botiquín Trauma Tipo A", marca: "",         modelo: "",       serie: "",        estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "Sala Trauma",  bombero_nombre: "",           fecha_fabricacion: "",           fecha_recepcion: "2025-01-10", fecha_vencimiento: "2027-01-10" },
+            { codigo: "HRR-0001", categoria: "HERRAMIENTA", subcategoria: "Corte",    descripcion: "Amoladora Angular 9\"", marca: "Makita",   modelo: "GA9020", serie: "MK-123",  estado: "MANTENCION",criticidad: "MEDIA", ubicacion_nombre: "Bodega Principal", bombero_nombre: "",         fecha_fabricacion: "",           fecha_recepcion: "",           fecha_vencimiento: "" },
         ];
         const controles = [
             { codigo_item: "EPP-0001", tipo: "INSPECCION", fecha_objetivo: "2025-06-01", fecha_real: "", resultado: "", observacion: "Inspección anual" },
@@ -1320,8 +1338,8 @@ app.post("/importar/items", upload.single("archivo"), (req, res) => {
             return res.status(400).json({ error: `Referencias no encontradas:\n${errores.map(e => "• " + e).join("\n")}` });
 
         const getItem = db.prepare("SELECT id FROM item WHERE codigo = ?");
-        const insItem = db.prepare("INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        const updItem = db.prepare("UPDATE item SET categoria=?, subcategoria=?, descripcion=?, marca=?, modelo=?, serie=?, estado=?, criticidad=?, ubicacion_actual_id=?, asignado_bombero_id=?, actualizado_en=datetime('now') WHERE codigo=?");
+        const insItem = db.prepare("INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id, fecha_fabricacion, fecha_recepcion, fecha_vencimiento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        const updItem = db.prepare("UPDATE item SET categoria=?, subcategoria=?, descripcion=?, marca=?, modelo=?, serie=?, estado=?, criticidad=?, ubicacion_actual_id=?, asignado_bombero_id=?, fecha_fabricacion=COALESCE(?, fecha_fabricacion), fecha_recepcion=COALESCE(?, fecha_recepcion), fecha_vencimiento=COALESCE(?, fecha_vencimiento), actualizado_en=datetime('now') WHERE codigo=?");
         const insMov  = db.prepare("INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))");
         const insCtrl = db.prepare("INSERT INTO control (item_id, tipo, fecha_objetivo, fecha_real, resultado, observacion) VALUES (?, ?, ?, ?, ?, ?)");
 
@@ -1342,13 +1360,16 @@ app.post("/importar/items", upload.single("archivo"), (req, res) => {
                 const bomNombre    = normXlsx(it.bombero_nombre);
                 const ubicId       = ubicNombre ? ubicMap.get(ubicNombre) : null;
                 const bomId        = bomNombre  ? bomMap.get(bomNombre)   : null;
+                const fechaFab     = normFechaXlsx(it.fecha_fabricacion);
+                const fechaRec     = normFechaXlsx(it.fecha_recepcion);
+                const fechaVenc    = normFechaXlsx(it.fecha_vencimiento);
 
                 const existente = getItem.get(codigo);
                 if (existente) {
-                    updItem.run(categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicId, bomId, codigo);
+                    updItem.run(categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicId, bomId, fechaFab, fechaRec, fechaVenc, codigo);
                     actualizados++;
                 } else {
-                    const info  = insItem.run(codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicId, bomId);
+                    const info  = insItem.run(codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicId, bomId, fechaFab, fechaRec, fechaVenc);
                     const hacia = bomId  ? `Asignado a ${bomNombre}` : ubicId ? `Ubicado en ${ubicNombre}` : "Sin ubicar";
                     insMov.run(info.lastInsertRowid, "ALTA", "Importación parcial", hacia, "Sistema", "Importación parcial desde Excel");
                     insertados++;
