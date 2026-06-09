@@ -1,6 +1,18 @@
+# Dependencias
+node_modules/
+
+# Base de datos (datos locales, no versionar)
+backend/data/*.db
+backend/data/*.db-journal
+backend/data/*.db-wal
+backend/data/*.db-shm
+
 # Env
 .env
 .env.local
+
+# Build
+dist/
 
 # OS
 .DS_Store

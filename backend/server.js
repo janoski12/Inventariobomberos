@@ -717,6 +717,7 @@ app.post("/importar", upload.single("archivo"), (req, res) => {
         const insMov       = db.prepare(`INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`);
 
         db.transaction(() => {
+            db.prepare("DELETE FROM uso_trauma").run();
             db.prepare("DELETE FROM movimiento").run();
             db.prepare("DELETE FROM control").run();
             db.prepare("DELETE FROM item").run();
@@ -895,6 +896,7 @@ app.delete("/items/:id", (req, res) => {
         if (!item) return notFound(res, "Item no encontrado");
 
         db.transaction(() => {
+            db.prepare("DELETE FROM uso_trauma WHERE item_id=?").run(id);
             db.prepare("DELETE FROM control   WHERE item_id=?").run(id);
             db.prepare("DELETE FROM movimiento WHERE item_id=?").run(id);
             db.prepare("DELETE FROM item       WHERE id=?").run(id);
