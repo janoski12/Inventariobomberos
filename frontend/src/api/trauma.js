@@ -28,3 +28,19 @@ export const registrarUso = (id, payload) =>
 
 export const eliminarUso = (usoId) =>
   request(`${API_URL}/trauma/usos/${usoId}`, { method: "DELETE" });
+
+export async function exportarTrauma() {
+  const res = await fetch(`${API_URL}/trauma/exportar`);
+  if (!res.ok) throw new Error(`Error ${res.status}`);
+  const blob = await res.blob();
+  const fecha = new Date().toISOString().slice(0, 10);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `trauma_${fecha}.xlsx`;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
+}

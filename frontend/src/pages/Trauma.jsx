@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { obtenerTrauma, actualizarFechasTrauma, obtenerUsosTrauma, registrarUso, eliminarUso } from "../api/trauma";
+import { obtenerTrauma, actualizarFechasTrauma, obtenerUsosTrauma, registrarUso, eliminarUso, exportarTrauma } from "../api/trauma";
 import Modal from "../components/Modal";
 import { useDialog } from "../context/DialogContext";
 
@@ -56,6 +56,18 @@ export default function Trauma() {
   const [cargandoUsos, setCargandoUsos]   = useState(false);
   const [formUso, setFormUso]             = useState({ fecha: "", cantidad: 1, motivo: "", responsable: "", observacion: "" });
   const [guardandoUso, setGuardandoUso]   = useState(false);
+  const [exportando, setExportando]       = useState(false);
+
+  async function handleExportar() {
+    try {
+      setExportando(true);
+      await exportarTrauma();
+    } catch {
+      toast("No se pudo exportar. Revisa que el backend esté activo.");
+    } finally {
+      setExportando(false);
+    }
+  }
 
   async function cargar() {
     setCargando(true);
@@ -95,7 +107,12 @@ export default function Trauma() {
 
   return (
     <div className="container">
-      <h2>Material de Trauma</h2>
+      <div className="spread">
+        <h2>Material de Trauma</h2>
+        <button className="btn-light" disabled={exportando || items.length === 0} onClick={handleExportar}>
+          {exportando ? "Exportando..." : "Exportar Excel"}
+        </button>
+      </div>
       <p className="muted">Ítems de categoría TRAUMA con control de fechas y registro de uso.</p>
 
       <div className="trauma-stats">
