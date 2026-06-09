@@ -10,17 +10,21 @@ CREATE TABLE IF NOT EXISTS bombero (
     creado_en TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- los imports parciales upsertan por nombre: debe ser unico
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bombero_nombre ON bombero(nombre);
 
 --ubicacion / lugar
 CREATE TABLE IF NOT EXISTS ubicacion (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre TEXT NOT NULL,
-    tipo TEXT NOT NULL DEFAULT 'conteiner',
+    tipo TEXT NOT NULL DEFAULT 'BODEGA',
     responsable TEXT,
     codigo_qr TEXT,
     activo INTEGER NOT NULL DEFAULT 1,
     creado_en TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ubicacion_nombre ON ubicacion(nombre);
 
 --items / activos
 CREATE TABLE IF NOT EXISTS item (

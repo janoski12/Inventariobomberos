@@ -30,4 +30,10 @@ try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_bombero_registro ON bombero
 // Normalizar estados existentes a uppercase
 try { db.exec("UPDATE bombero SET estado = UPPER(estado) WHERE estado != UPPER(estado)"); } catch {}
 
+// Normalizar tipos de ubicacion legacy (minusculas o valores invalidos)
+try {
+    db.exec("UPDATE ubicacion SET tipo = UPPER(tipo) WHERE tipo != UPPER(tipo)");
+    db.exec("UPDATE ubicacion SET tipo = 'OTRO' WHERE tipo IS NULL OR tipo = '' OR tipo NOT IN ('BODEGA','SALA','SALON','CONTAINER','CARRO','CASILLERO','OTRO')");
+} catch {}
+
 module.exports = db;

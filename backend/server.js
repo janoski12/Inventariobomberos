@@ -62,6 +62,8 @@ app.post("/bomberos", (req, res) => {
         if (!ESTADOS_BOMBERO.includes(estado))
             return badRequest(res, `estado inválido. Use: ${ESTADOS_BOMBERO.join(", ")}`);
 
+        if (db.prepare("SELECT id FROM bombero WHERE nombre=?").get(nombre))
+            return conflict(res, `Ya existe un bombero llamado "${nombre}"`);
         if (rut && db.prepare("SELECT id FROM bombero WHERE rut=?").get(rut))
             return conflict(res, `Ya existe un bombero con el RUT ${rut}`);
         if (numero_registro && db.prepare("SELECT id FROM bombero WHERE numero_registro=?").get(numero_registro))
@@ -98,6 +100,8 @@ app.put("/bomberos/:id", (req, res) => {
         if (!ESTADOS_BOMBERO.includes(estado))
             return badRequest(res, `estado inválido. Use: ${ESTADOS_BOMBERO.join(", ")}`);
 
+        if (db.prepare("SELECT id FROM bombero WHERE nombre=? AND id!=?").get(nombre, id))
+            return conflict(res, `Ya existe un bombero llamado "${nombre}"`);
         const rutExiste = rut && db.prepare("SELECT id FROM bombero WHERE rut=? AND id!=?").get(rut, id);
         if (rutExiste) return conflict(res, `Ya existe un bombero con el RUT ${rut}`);
         const regExiste = numero_registro && db.prepare("SELECT id FROM bombero WHERE numero_registro=? AND id!=?").get(numero_registro, id);
@@ -152,9 +156,12 @@ app.post("/ubicaciones", (req, res) => {
             return badRequest(res, "activo debe ser 0 o 1");
         }
 
+        if (db.prepare("SELECT id FROM ubicacion WHERE nombre=?").get(nombre))
+            return conflict(res, `Ya existe una ubicación llamada "${nombre}"`);
+
         const info = db.prepare(`
             INSERT INTO ubicacion (nombre, tipo, responsable, codigo_qr, activo)
-            VALUES (?, ?, ?, ?, ?)    
+            VALUES (?, ?, ?, ?, ?)
         `).run(nombre, tipo, responsable, codigo_qr, activo);
 
         res.status(201).json({ id: info.lastInsertRowid });
@@ -189,8 +196,11 @@ app.put("/ubicaciones/:id", (req, res) => {
             return badRequest(res, "activo debe ser 0 o 1");
         }
 
+        if (db.prepare("SELECT id FROM ubicacion WHERE nombre=? AND id!=?").get(nombre, id))
+            return conflict(res, `Ya existe una ubicación llamada "${nombre}"`);
+
         db.prepare(`
-            UPDATE ubicacion 
+            UPDATE ubicacion
             SET nombre=?, tipo=?, responsable=?, codigo_qr=?, activo=?
             WHERE id=?
         `).run(
