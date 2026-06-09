@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { importarExcel, importarParcial, descargarPlantilla, descargarPlantillaParcial } from "../api/importar";
+import { importarExcel, importarParcial, descargarPlantilla, descargarPlantillaParcial, descargarBackup } from "../api/importar";
 import { useDialog } from "../context/DialogContext";
 
 export default function Importar() {
@@ -11,6 +11,19 @@ export default function Importar() {
   const [error, setError]           = useState("");
   const [inputKey, setInputKey]     = useState(0);
   const [descargando, setDescargando] = useState(false);
+  const [respaldando, setRespaldando] = useState(false);
+
+  async function handleBackup() {
+    try {
+      setRespaldando(true);
+      await descargarBackup();
+      toast("Respaldo descargado", "success");
+    } catch {
+      toast("No se pudo generar el respaldo.");
+    } finally {
+      setRespaldando(false);
+    }
+  }
 
   async function handleDescargarCompleta() {
     try {
@@ -45,6 +58,19 @@ export default function Importar() {
     <div className="container">
       <h2>Importar datos</h2>
       <p className="muted">Carga o actualiza datos del sistema mediante archivos Excel.</p>
+
+      {/* ── RESPALDO ── */}
+      <p className="importar-seccion-label">Respaldo</p>
+      <div className="row" style={{ alignItems: "center" }}>
+        <button className="btn-light" disabled={respaldando} onClick={handleBackup}>
+          {respaldando ? "Generando..." : "Descargar respaldo de la BD"}
+        </button>
+        <span className="muted">
+          Descarga una copia completa de la base de datos. Recomendado antes de una carga completa.
+        </span>
+      </div>
+
+      <hr className="importar-seccion-div" />
 
       {/* ── CARGA COMPLETA ── */}
       <p className="importar-seccion-label">Carga completa</p>

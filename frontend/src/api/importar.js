@@ -26,13 +26,22 @@ export async function descargarPlantillaParcial(seccion) {
   await _descargarArchivo(`${API_URL}/plantilla/${seccion}`, `plantilla_${seccion}.xlsx`);
 }
 
+export async function descargarBackup() {
+  const fecha = new Date().toISOString().slice(0, 10);
+  await _descargarArchivo(`${API_URL}/backup`, `inventario_backup_${fecha}.db`);
+}
+
 async function _descargarArchivo(url, nombre) {
   const r = await fetch(url);
-  if (!r.ok) throw new Error("Error descargando plantilla");
+  if (!r.ok) throw new Error("Error descargando el archivo");
   const blob = await r.blob();
+  const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
+  a.href = objectUrl;
   a.download = nombre;
+  a.style.display = "none";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(a.href);
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 100);
 }

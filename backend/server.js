@@ -1372,6 +1372,26 @@ app.post("/importar/items", upload.single("archivo"), (req, res) => {
     } catch (e) { return res.status(400).json({ error: String(e.message ?? e) }); }
 });
 
+// Descargar respaldo de la base de datos (snapshot consistente)
+app.get("/backup", async (_req, res) => {
+    const fs   = require("fs");
+    const path = require("path");
+    const tmpFile = path.join(__dirname, "data", `backup_tmp_${Date.now()}.db`);
+    try {
+        await db.backup(tmpFile);
+        const fecha = new Date().toISOString().slice(0, 10);
+        res.setHeader("Content-Type", "application/octet-stream");
+        res.setHeader("Content-Disposition", `attachment; filename="inventario_backup_${fecha}.db"`);
+        res.sendFile(tmpFile, (err) => {
+            fs.unlink(tmpFile, () => {});
+            if (err && !res.headersSent) serverError(res, err, "Error enviando el respaldo");
+        });
+    } catch (e) {
+        fs.unlink(tmpFile, () => {});
+        return serverError(res, e, "Error generando el respaldo");
+    }
+});
+
 // Iniciar servidor
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`API Inventario corriendo en http://localhost:${PORT}`));
