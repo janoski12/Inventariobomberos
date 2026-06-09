@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { obtenerTrauma, actualizarFechasTrauma, obtenerUsosTrauma, registrarUso, eliminarUso } from "../api/trauma";
 import Modal from "../components/Modal";
@@ -10,6 +10,13 @@ const CHIP_ESTADO = {
   FUERA_SERVICIO:"chip chip--fuera_servicio",
   BAJA:          "chip chip--baja",
 };
+
+function formatFecha(iso) {
+  if (!iso) return "—";
+  const parts = iso.split("-");
+  return parts[2] + "/" + parts[1] + "/" + parts[0];
+}
+
 
 function estadoVenc(fecha) {
   if (!fecha) return { label: "Sin fecha", cls: "venc-sin-fecha" };
@@ -132,11 +139,11 @@ export default function Trauma() {
                 <div className="trauma-fechas">
                   <div className="trauma-fecha-item">
                     <span className="trauma-fecha-label">Recepción</span>
-                    <span className="trauma-fecha-valor">{it.fecha_recepcion ?? "—"}</span>
+                    <span className="trauma-fecha-valor">{formatFecha(it.fecha_recepcion)}</span>
                   </div>
                   <div className="trauma-fecha-item">
                     <span className="trauma-fecha-label">Vencimiento</span>
-                    <span className={`trauma-fecha-valor ${venc.cls}`}>{it.fecha_vencimiento ?? "—"}</span>
+                    <span className={`trauma-fecha-valor ${venc.cls}`}>{formatFecha(it.fecha_vencimiento)}</span>
                   </div>
                   <div className="trauma-fecha-item">
                     <span className="trauma-fecha-label">Estado venc.</span>
@@ -266,7 +273,7 @@ export default function Trauma() {
                   {usos.map((u) => (
                     <div key={u.id} className="inforow">
                       <div>
-                        <span className="item-code">{u.fecha}</span>
+                        <span className="item-code">{formatFecha(u.fecha)}</span>
                         {u.motivo && <span className="item-desc">{u.motivo}</span>}
                         <div className="card-detail">
                           {u.cantidad} unidad{u.cantidad !== 1 ? "es" : ""}

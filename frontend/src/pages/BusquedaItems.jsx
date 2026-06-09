@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { buscarItems, exportarItems } from "../api/items";
 import { obtenerReportes } from "../api/reportes";
@@ -205,7 +205,7 @@ export default function BusquedaItems() {
                     onClick={async () => {
                         try {
                             setExportando(true);
-                            await exportarItems({ q, estado: filtroEstado, categoria: filtroCategoria, criticidad: filtroCriticidad, bombero_id: filtroBombero, ubicacion_id: filtroUbicacion });
+                            await exportarItems({ q: debouncedQ, estado: filtroEstado, categoria: filtroCategoria, criticidad: filtroCriticidad, bombero_id: filtroBombero, ubicacion_id: filtroUbicacion });
                         } catch { toast("No se pudo exportar. Revisa que el backend esté activo."); }
                         finally { setExportando(false); }
                     }}

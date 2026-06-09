@@ -71,11 +71,15 @@ export async function exportarItems({ q = "", estado = "", categoria = "", criti
   if (!res.ok) throw new Error(`Error ${res.status}`);
   const blob = await res.blob();
   const fecha = new Date().toISOString().slice(0, 10);
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
+  a.href = url;
   a.download = `inventario_${fecha}.xlsx`;
+  a.style.display = "none";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(a.href);
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
 }
 
 export function obtenerSubcategorias(categoria) {

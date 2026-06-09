@@ -827,7 +827,8 @@ function InfoRow({ label, value }) {
 }
 
 function tiempoEnServicio(fechaStr) {
-  const inicio = new Date(fechaStr);
+  const [y, m, d] = fechaStr.split("-").map(Number);
+  const inicio = new Date(y, m - 1, d);
   const hoy    = new Date();
   let años  = hoy.getFullYear() - inicio.getFullYear();
   let meses = hoy.getMonth()    - inicio.getMonth();

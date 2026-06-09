@@ -453,6 +453,13 @@ app.get("/items/exportar", (req, res) => {
         const bombero_id   = req.query.bombero_id  ? Number(req.query.bombero_id)  : null;
         const ubicacion_id = req.query.ubicacion_id? Number(req.query.ubicacion_id): null;
 
+        if (estado     && !ESTADOS_ITEM.includes(estado))
+            return badRequest(res, `estado inválido. Use: ${ESTADOS_ITEM.join(", ")}`);
+        if (categoria  && !CATEGORIAS.includes(categoria))
+            return badRequest(res, `categoria inválida. Use: ${CATEGORIAS.join(", ")}`);
+        if (criticidad && !CRITICIDADES.includes(criticidad))
+            return badRequest(res, `criticidad inválida. Use: ${CRITICIDADES.join(", ")}`);
+
         const conditions = [], params = [];
         if (q)           { conditions.push("(i.codigo LIKE ? OR i.descripcion LIKE ?)"); params.push(`%${q}%`, `%${q}%`); }
         if (estado)      { conditions.push("i.estado = ?");               params.push(estado); }
@@ -466,7 +473,7 @@ app.get("/items/exportar", (req, res) => {
             SELECT i.codigo, i.descripcion, i.categoria, i.subcategoria, i.estado, i.criticidad,
                    i.marca, i.modelo, i.serie,
                    b.nombre AS asignado_a, u.nombre AS ubicacion,
-                   i.fecha_recepcion, i.fecha_vencimiento
+                   i.fecha_recepcion, i.fecha_vencimiento, i.fecha_fabricacion
             FROM item i
             LEFT JOIN ubicacion u ON u.id = i.ubicacion_actual_id
             LEFT JOIN bombero   b ON b.id = i.asignado_bombero_id
@@ -475,19 +482,20 @@ app.get("/items/exportar", (req, res) => {
         `).all(...params);
 
         const datos = rows.map(r => ({
-            "Código":           r.codigo,
-            "Descripción":      r.descripcion,
-            "Categoría":        r.categoria,
-            "Subcategoría":     r.subcategoria ?? "",
-            "Estado":           r.estado,
-            "Criticidad":       r.criticidad,
-            "Marca":            r.marca ?? "",
-            "Modelo":           r.modelo ?? "",
-            "Serie":            r.serie ?? "",
-            "Asignado a":       r.asignado_a ?? "",
-            "Ubicación":        r.ubicacion ?? "",
-            "Fecha Recepción":  r.fecha_recepcion ?? "",
-            "Fecha Vencimiento":r.fecha_vencimiento ?? "",
+            "Código":             r.codigo,
+            "Descripción":        r.descripcion,
+            "Categoría":          r.categoria,
+            "Subcategoría":       r.subcategoria ?? "",
+            "Estado":             r.estado,
+            "Criticidad":         r.criticidad,
+            "Marca":              r.marca ?? "",
+            "Modelo":             r.modelo ?? "",
+            "Serie":              r.serie ?? "",
+            "Asignado a":         r.asignado_a ?? "",
+            "Ubicación":          r.ubicacion ?? "",
+            "Fecha Fabricación":  r.fecha_fabricacion ?? "",
+            "Fecha Recepción":    r.fecha_recepcion ?? "",
+            "Fecha Vencimiento":  r.fecha_vencimiento ?? "",
         }));
 
         const wb = xlsx.utils.book_new();
