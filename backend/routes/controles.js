@@ -1,6 +1,6 @@
 const router = require("express").Router();
 const db = require("../db");
-const { TIPOS_CONTROL, RESULTADOS_CONTROL, isNil, cleanText, badRequest, notFound, serverError } = require("../lib/helpers");
+const { TIPOS_CONTROL, RESULTADOS_CONTROL, isNil, cleanText, badRequest, notFound, serverError, esFechaValida } = require("../lib/helpers");
 
 // Listar controles de un item
 router.get("/items/:id/controles", (req, res) => {
@@ -35,6 +35,7 @@ router.post("/items/:id/controles", (req, res) => {
         if (!tipo) return badRequest(res, "tipo es requerido");
         if (!TIPOS_CONTROL.includes(tipo)) return badRequest(res, `tipo inválido. Use: ${TIPOS_CONTROL.join(", ")}`);
         if (!fecha_objetivo) return badRequest(res, "fecha_objetivo es requerida");
+        if (!esFechaValida(fecha_objetivo)) return badRequest(res, "fecha_objetivo inválida. Use formato YYYY-MM-DD");
 
         const info = db.prepare(`
             INSERT INTO control (item_id, tipo, fecha_objetivo, observacion)
@@ -61,6 +62,7 @@ router.put("/controles/:id", (req, res) => {
         const observacion = isNil(req.body.observacion) ? actual.observacion : cleanText(req.body.observacion);
 
         if (!fecha_real) return badRequest(res, "fecha_real es requerida");
+        if (!esFechaValida(fecha_real)) return badRequest(res, "fecha_real inválida. Use formato YYYY-MM-DD");
         if (!resultado) return badRequest(res, "resultado es requerido");
         if (!RESULTADOS_CONTROL.includes(resultado)) return badRequest(res, `resultado inválido. Use: ${RESULTADOS_CONTROL.join(", ")}`);
 

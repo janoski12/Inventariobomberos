@@ -1,6 +1,6 @@
 const router = require("express").Router();
 const db = require("../db");
-const { ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, isNil, cleanText, badRequest, notFound, conflict, serverError } = require("../lib/helpers");
+const { ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, isNil, cleanText, badRequest, notFound, conflict, serverError, esFechaValida } = require("../lib/helpers");
 
 //Crear items
 router.post("/items", (req, res) => {
@@ -31,6 +31,9 @@ router.post("/items", (req, res) => {
         }
         if (!CRITICIDADES.includes(criticidad)) {
             return badRequest(res, `criticidad inválida. Use: ${CRITICIDADES.join(", ")}`);
+        }
+        if (fecha_fabricacion && !esFechaValida(fecha_fabricacion)) {
+            return badRequest(res, "fecha_fabricacion inválida. Use formato YYYY-MM-DD");
         }
 
         if (!isNil(req.body.ubicacion_actual_id) && (!Number.isInteger(ubicacion_actual_id) || ubicacion_actual_id <= 0)) {

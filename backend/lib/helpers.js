@@ -60,6 +60,16 @@ function normFechaXlsx(v) {
     return null;
 }
 
+// Valida formato YYYY-MM-DD y que sea una fecha real de calendario
+function esFechaValida(s) {
+    if (typeof s !== "string") return false;
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return false;
+    const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    const date = new Date(y, mo - 1, d);
+    return date.getFullYear() === y && date.getMonth() === mo - 1 && date.getDate() === d;
+}
+
 function parseXlsxBuffer(req, res) {
     if (!req.file) { badRequest(res, "No se recibió ningún archivo"); return null; }
     const ext = req.file.originalname.split(".").pop().toLowerCase();
@@ -72,5 +82,5 @@ module.exports = {
     ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, ESTADOS_BOMBERO, TIPOS_UBICACION,
     TIPOS_CONTROL, RESULTADOS_CONTROL,
     isNil, cleanText, badRequest, notFound, conflict, serverError,
-    normXlsx, normFechaXlsx, parseXlsxBuffer,
+    normXlsx, normFechaXlsx, parseXlsxBuffer, esFechaValida,
 };

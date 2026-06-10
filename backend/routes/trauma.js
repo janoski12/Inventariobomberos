@@ -1,6 +1,6 @@
 const router = require("express").Router();
 const db = require("../db");
-const { cleanText, badRequest, notFound, serverError } = require("../lib/helpers");
+const { cleanText, badRequest, notFound, serverError, esFechaValida } = require("../lib/helpers");
 
 // Listar todos los ítems TRAUMA con fechas y conteo de usos
 router.get("/trauma", (_req, res) => {
@@ -108,6 +108,13 @@ router.put("/trauma/:id/fechas", (req, res) => {
         const fecha_recepcion   = cleanText(req.body.fecha_recepcion)   || null;
         const fecha_vencimiento = cleanText(req.body.fecha_vencimiento) || null;
 
+        if (fecha_recepcion && !esFechaValida(fecha_recepcion))
+            return badRequest(res, "fecha_recepcion inválida. Use formato YYYY-MM-DD");
+        if (fecha_vencimiento && !esFechaValida(fecha_vencimiento))
+            return badRequest(res, "fecha_vencimiento inválida. Use formato YYYY-MM-DD");
+        if (fecha_recepcion && fecha_vencimiento && fecha_vencimiento < fecha_recepcion)
+            return badRequest(res, "La fecha de vencimiento no puede ser anterior a la de recepción");
+
         db.prepare(`UPDATE item SET fecha_recepcion=?, fecha_vencimiento=?, actualizado_en=datetime('now') WHERE id=?`)
             .run(fecha_recepcion, fecha_vencimiento, id);
 
@@ -140,6 +147,9 @@ router.post("/trauma/:id/usos", (req, res) => {
         const responsable = cleanText(req.body.responsable);
         const observacion = cleanText(req.body.observacion);
         const fecha       = cleanText(req.body.fecha) || new Date().toISOString().slice(0, 10);
+
+        if (!esFechaValida(fecha))
+            return badRequest(res, "fecha inválida. Use formato YYYY-MM-DD");
 
         const info = db.prepare(`
             INSERT INTO uso_trauma (item_id, fecha, cantidad, motivo, responsable, observacion)
