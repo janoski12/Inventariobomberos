@@ -183,7 +183,7 @@ export default function Ubicaciones() {
                 <button
                   className="btn-light"
                   onClick={async () => {
-                    try { await descargarQR(u.id, u.nombre); }
+                    try { await descargarQR(u.id, u.nombre, u.codigo_qr); }
                     catch { toast("No se pudo descargar el QR."); }
                   }}
                 >

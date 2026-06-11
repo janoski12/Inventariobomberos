@@ -55,7 +55,7 @@ export default function FichaUbicacion() {
         <button
           className="btn-light"
           onClick={async () => {
-            try { await descargarQR(ubicacion.id, ubicacion.nombre); }
+            try { await descargarQR(ubicacion.id, ubicacion.nombre, ubicacion.codigo_qr); }
             catch { toast("No se pudo descargar el QR."); }
           }}
         >
