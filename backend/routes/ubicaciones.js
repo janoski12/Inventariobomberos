@@ -22,12 +22,22 @@ router.post("/ubicaciones", (req, res) => {
         if (db.prepare("SELECT id FROM ubicacion WHERE nombre=?").get(nombre))
             return conflict(res, `Ya existe una ubicación llamada "${nombre}"`);
 
-        const info = db.prepare(`
-            INSERT INTO ubicacion (nombre, tipo, responsable, codigo_qr, activo)
-            VALUES (?, ?, ?, ?, ?)
-        `).run(nombre, tipo, responsable, codigo_qr, activo);
+        // Si no viene codigo_qr, se genera uno automatico (UBIC-0001) tras conocer el id
+        const nuevoId = db.transaction(() => {
+            const info = db.prepare(`
+                INSERT INTO ubicacion (nombre, tipo, responsable, codigo_qr, activo)
+                VALUES (?, ?, ?, ?, ?)
+            `).run(nombre, tipo, responsable, codigo_qr, activo);
 
-        res.status(201).json({ id: info.lastInsertRowid });
+            const id = info.lastInsertRowid;
+            if (!codigo_qr) {
+                const codigo = `UBIC-${String(id).padStart(4, "0")}`;
+                db.prepare("UPDATE ubicacion SET codigo_qr=? WHERE id=?").run(codigo, id);
+            }
+            return id;
+        })();
+
+        res.status(201).json({ id: nuevoId });
     } catch (e) {
         return serverError(res, e, "Error creando ubicacion");
     }
@@ -85,6 +95,35 @@ router.put("/ubicaciones/:id", (req, res) => {
 router.get("/ubicaciones", (req, res) => {
     const rows = db.prepare("SELECT * FROM ubicacion WHERE activo=1 ORDER BY nombre").all();
     res.json(rows);
+});
+
+// Codigo QR de la ubicacion en PNG (codifica la URL de la ficha)
+router.get("/ubicaciones/:id/qr", async (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id) || id <= 0) return badRequest(res, "ID inválido");
+
+        const ubicacion = db.prepare("SELECT id, nombre, codigo_qr FROM ubicacion WHERE id=?").get(id);
+        if (!ubicacion) return notFound(res, "Ubicacion no encontrada");
+
+        const qrcode = require("qrcode");
+        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+        const url = `${frontendUrl}/ubicaciones/${id}`;
+
+        const png = await qrcode.toBuffer(url, {
+            type: "png",
+            width: 512,
+            margin: 2,
+            errorCorrectionLevel: "M",
+        });
+
+        const slug = ubicacion.nombre.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+        res.setHeader("Content-Type", "image/png");
+        res.setHeader("Content-Disposition", `attachment; filename="qr_${slug}.png"`);
+        res.send(png);
+    } catch (e) {
+        return serverError(res, e, "Error generando el código QR");
+    }
 });
 
 // Ficha de ubicación con sus ítems

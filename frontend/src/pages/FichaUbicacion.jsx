@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { obtenerUbicacion } from "../api/ubicaciones";
+import { obtenerUbicacion, descargarQR } from "../api/ubicaciones";
+import { useDialog } from "../context/DialogContext";
 
 const CHIP_ESTADO = {
   OPERATIVO:      "chip chip--operativo",
@@ -16,6 +17,7 @@ const CHIP_CRIT = {
 
 export default function FichaUbicacion() {
   const { id } = useParams();
+  const { toast } = useDialog();
   const [ubicacion, setUbicacion] = useState(null);
   const [cargando, setCargando]   = useState(true);
   const [error, setError]         = useState("");
@@ -43,11 +45,22 @@ export default function FichaUbicacion() {
     <div className="container">
       <Link to="/ubicaciones" style={{ textDecoration: "none" }}>← Volver a Ubicaciones</Link>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "12px 0" }}>
-        <h2 style={{ margin: 0 }}>{ubicacion.nombre}</h2>
-        <span className={ubicacion.activo ? "chip chip--operativo" : "chip chip--baja"}>
-          {ubicacion.activo ? "ACTIVA" : "INACTIVA"}
-        </span>
+      <div className="spread" style={{ margin: "12px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <h2 style={{ margin: 0 }}>{ubicacion.nombre}</h2>
+          <span className={ubicacion.activo ? "chip chip--operativo" : "chip chip--baja"}>
+            {ubicacion.activo ? "ACTIVA" : "INACTIVA"}
+          </span>
+        </div>
+        <button
+          className="btn-light"
+          onClick={async () => {
+            try { await descargarQR(ubicacion.id, ubicacion.nombre); }
+            catch { toast("No se pudo descargar el QR."); }
+          }}
+        >
+          Descargar QR
+        </button>
       </div>
 
       {/* Datos de la ubicación */}

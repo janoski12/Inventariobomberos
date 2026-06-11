@@ -33,3 +33,19 @@ export function eliminarUbicacion(id) {
 export function obtenerUbicacion(id) {
   return request(`${API_URL}/ubicaciones/${id}`);
 }
+
+export async function descargarQR(id, nombre) {
+  const res = await fetch(`${API_URL}/ubicaciones/${id}/qr`);
+  if (!res.ok) throw new Error(`Error ${res.status}`);
+  const blob = await res.blob();
+  const slug = (nombre ?? `ubicacion_${id}`).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `qr_${slug}.png`;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
+}

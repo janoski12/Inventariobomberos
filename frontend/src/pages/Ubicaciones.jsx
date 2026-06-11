@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { actualizarUbicacion, crearUbicacion, eliminarUbicacion, listarUbicaciones } from "../api/ubicaciones";
+import { actualizarUbicacion, crearUbicacion, eliminarUbicacion, listarUbicaciones, descargarQR } from "../api/ubicaciones";
 import Modal from "../components/Modal";
 import { useDialog } from "../context/DialogContext";
 
@@ -180,6 +180,15 @@ export default function Ubicaciones() {
               </div>
 
               <div className="row">
+                <button
+                  className="btn-light"
+                  onClick={async () => {
+                    try { await descargarQR(u.id, u.nombre); }
+                    catch { toast("No se pudo descargar el QR."); }
+                  }}
+                >
+                  QR
+                </button>
                 <button
                   className="btn-light"
                   onClick={() => {
