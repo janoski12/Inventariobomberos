@@ -52,7 +52,7 @@ router.post("/importar", upload.single("archivo"), (req, res) => {
             codes.add(c);
         }
 
-        const insUbicacion = db.prepare(`INSERT INTO ubicacion (nombre, tipo, responsable, codigo_qr, activo) VALUES (?, ?, ?, ?, ?)`);
+        const insUbicacion = db.prepare(`INSERT INTO ubicacion (nombre, tipo, responsable, activo) VALUES (?, ?, ?, ?)`);
         const insBombero   = db.prepare(`INSERT INTO bombero (nombre, cargo, estado, observaciones) VALUES (?, ?, ?, ?)`);
         const insItem      = db.prepare(`INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id, fecha_fabricacion, fecha_recepcion, fecha_vencimiento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         const insControl   = db.prepare(`INSERT INTO control (item_id, tipo, fecha_objetivo, fecha_real, resultado, observacion) VALUES (?, ?, ?, ?, ?, ?)`);
@@ -69,8 +69,11 @@ router.post("/importar", upload.single("archivo"), (req, res) => {
             for (const u of ubicaciones) {
                 const nombre = norm(u.nombre); if (!nombre) continue;
                 const tipo   = TIPOS_UBICACION.includes(norm(u.tipo).toUpperCase()) ? norm(u.tipo).toUpperCase() : "OTRO";
-                insUbicacion.run(nombre, tipo, norm(u.responsable) || null, norm(u.codigo_qr) || null, norm(u.activo) === "0" ? 0 : 1);
+                insUbicacion.run(nombre, tipo, norm(u.responsable) || null, norm(u.activo) === "0" ? 0 : 1);
             }
+
+            // codigo_qr es gestionado por el sistema: UBIC-XXXX segun el id
+            db.prepare("UPDATE ubicacion SET codigo_qr = 'UBIC-' || printf('%04d', id)").run();
 
             const ubicMap = new Map();
             for (const r of db.prepare("SELECT id, nombre FROM ubicacion").all()) ubicMap.set(r.nombre, r.id);
@@ -137,9 +140,9 @@ router.get("/plantilla", (_req, res) => {
             { nombre: "María González", cargo: "Voluntario", estado: "ACTIVO",   observaciones: "" },
         ];
         const ubicaciones = [
-            { nombre: "Bodega Principal", tipo: "BODEGA",    responsable: "", codigo_qr: "", activo: 1 },
-            { nombre: "Carro 1",          tipo: "CARRO",     responsable: "", codigo_qr: "", activo: 1 },
-            { nombre: "Sala Trauma",      tipo: "SALA",      responsable: "", codigo_qr: "", activo: 1 },
+            { nombre: "Bodega Principal", tipo: "BODEGA",    responsable: "", activo: 1 },
+            { nombre: "Carro 1",          tipo: "CARRO",     responsable: "", activo: 1 },
+            { nombre: "Sala Trauma",      tipo: "SALA",      responsable: "", activo: 1 },
         ];
         const items = [
             { codigo: "EPP-0001", categoria: "EPP",          subcategoria: "Casco",    descripcion: "Casco Estructural",      marca: "Bullard",  modelo: "FH2",    serie: "SN-001", estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "",               bombero_nombre: "Juan Pérez", fecha_fabricacion: "2022-01-15", fecha_recepcion: "",           fecha_vencimiento: "" },
@@ -174,9 +177,9 @@ router.get("/plantilla/ubicaciones", (_req, res) => {
     try {
         const xlsx = require("xlsx");
         const datos = [
-            { nombre: "Bodega Principal", tipo: "BODEGA",    responsable: "Juan Pérez", codigo_qr: "", activo: 1 },
-            { nombre: "Carro 1",          tipo: "CARRO",     responsable: "",           codigo_qr: "", activo: 1 },
-            { nombre: "Sala Trauma",      tipo: "SALA",      responsable: "",           codigo_qr: "", activo: 1 },
+            { nombre: "Bodega Principal", tipo: "BODEGA",    responsable: "Juan Pérez", activo: 1 },
+            { nombre: "Carro 1",          tipo: "CARRO",     responsable: "",           activo: 1 },
+            { nombre: "Sala Trauma",      tipo: "SALA",      responsable: "",           activo: 1 },
         ];
         const wb = xlsx.utils.book_new();
         xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet(datos), "Ubicaciones");
@@ -246,8 +249,9 @@ router.post("/importar/ubicaciones", upload.single("archivo"), (req, res) => {
         }
 
         const getUbic = db.prepare("SELECT id FROM ubicacion WHERE nombre = ?");
-        const insUbic = db.prepare("INSERT INTO ubicacion (nombre, tipo, responsable, codigo_qr, activo) VALUES (?, ?, ?, ?, ?)");
-        const updUbic = db.prepare("UPDATE ubicacion SET tipo=?, responsable=?, codigo_qr=?, activo=? WHERE nombre=?");
+        const insUbic = db.prepare("INSERT INTO ubicacion (nombre, tipo, responsable, activo) VALUES (?, ?, ?, ?)");
+        const updUbic = db.prepare("UPDATE ubicacion SET tipo=?, responsable=?, activo=? WHERE nombre=?");
+        const setQr   = db.prepare("UPDATE ubicacion SET codigo_qr=? WHERE id=?");
 
         let insertados = 0, actualizados = 0;
 
@@ -256,10 +260,13 @@ router.post("/importar/ubicaciones", upload.single("archivo"), (req, res) => {
                 const nombre = normXlsx(u.nombre); if (!nombre) continue;
                 const tipo   = TIPOS_UBICACION.includes(normXlsx(u.tipo).toUpperCase()) ? normXlsx(u.tipo).toUpperCase() : "OTRO";
                 const resp   = normXlsx(u.responsable) || null;
-                const qr     = normXlsx(u.codigo_qr)   || null;
                 const activo = normXlsx(u.activo) === "0" ? 0 : 1;
-                if (getUbic.get(nombre)) { updUbic.run(tipo, resp, qr, activo, nombre); actualizados++; }
-                else                     { insUbic.run(nombre, tipo, resp, qr, activo); insertados++; }
+                if (getUbic.get(nombre)) { updUbic.run(tipo, resp, activo, nombre); actualizados++; }
+                else {
+                    const info = insUbic.run(nombre, tipo, resp, activo);
+                    setQr.run(`UBIC-${String(info.lastInsertRowid).padStart(4, "0")}`, info.lastInsertRowid);
+                    insertados++;
+                }
             }
         })();
 

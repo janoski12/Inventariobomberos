@@ -8,7 +8,6 @@ router.post("/ubicaciones", (req, res) => {
         const nombre = cleanText(req.body.nombre);
         const tipo = cleanText(req.body.tipo) || "BODEGA";
         const responsable = cleanText(req.body.responsable);
-        const codigo_qr = cleanText(req.body.codigo_qr);
         const activo = isNil(req.body.activo) ? 1 : Number(req.body.activo);
 
         if (!nombre) return badRequest(res, "nombre es requerido");
@@ -22,18 +21,15 @@ router.post("/ubicaciones", (req, res) => {
         if (db.prepare("SELECT id FROM ubicacion WHERE nombre=?").get(nombre))
             return conflict(res, `Ya existe una ubicación llamada "${nombre}"`);
 
-        // Si no viene codigo_qr, se genera uno automatico (UBIC-0001) tras conocer el id
+        // codigo_qr es gestionado por el sistema: siempre UBIC-XXXX segun el id
         const nuevoId = db.transaction(() => {
             const info = db.prepare(`
-                INSERT INTO ubicacion (nombre, tipo, responsable, codigo_qr, activo)
-                VALUES (?, ?, ?, ?, ?)
-            `).run(nombre, tipo, responsable, codigo_qr, activo);
+                INSERT INTO ubicacion (nombre, tipo, responsable, activo)
+                VALUES (?, ?, ?, ?)
+            `).run(nombre, tipo, responsable, activo);
 
             const id = info.lastInsertRowid;
-            if (!codigo_qr) {
-                const codigo = `UBIC-${String(id).padStart(4, "0")}`;
-                db.prepare("UPDATE ubicacion SET codigo_qr=? WHERE id=?").run(codigo, id);
-            }
+            db.prepare("UPDATE ubicacion SET codigo_qr=? WHERE id=?").run(`UBIC-${String(id).padStart(4, "0")}`, id);
             return id;
         })();
 
@@ -58,7 +54,6 @@ router.put("/ubicaciones/:id", (req, res) => {
         const nombre = cleanText(req.body.nombre) ?? actual.nombre;
         const tipo = cleanText(req.body.tipo) ?? actual.tipo;
         const responsable = cleanText(req.body.responsable);
-        const codigo_qr = cleanText(req.body.codigo_qr);
         const activo = isNil(req.body.activo) ? actual.activo : Number(req.body.activo);
 
         if (!nombre) return badRequest(res, "nombre es requerido");
@@ -72,15 +67,15 @@ router.put("/ubicaciones/:id", (req, res) => {
         if (db.prepare("SELECT id FROM ubicacion WHERE nombre=? AND id!=?").get(nombre, id))
             return conflict(res, `Ya existe una ubicación llamada "${nombre}"`);
 
+        // codigo_qr no se toca: es gestionado por el sistema
         db.prepare(`
             UPDATE ubicacion
-            SET nombre=?, tipo=?, responsable=?, codigo_qr=?, activo=?
+            SET nombre=?, tipo=?, responsable=?, activo=?
             WHERE id=?
         `).run(
             nombre,
             tipo,
             isNil(req.body.responsable) ? actual.responsable : responsable,
-            isNil(req.body.codigo_qr) ? actual.codigo_qr : codigo_qr,
             activo,
             id
         );

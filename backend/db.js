@@ -36,7 +36,7 @@ try {
     db.exec("UPDATE ubicacion SET tipo = 'OTRO' WHERE tipo IS NULL OR tipo = '' OR tipo NOT IN ('BODEGA','SALA','SALON','CONTAINER','CARRO','CASILLERO','OTRO')");
 } catch {}
 
-// Backfill: codigo_qr automatico para ubicaciones que no tienen
-try { db.exec("UPDATE ubicacion SET codigo_qr = 'UBIC-' || printf('%04d', id) WHERE codigo_qr IS NULL OR codigo_qr = ''"); } catch {}
+// codigo_qr gestionado por el sistema: formato UBIC-XXXX para todas
+try { db.exec("UPDATE ubicacion SET codigo_qr = 'UBIC-' || printf('%04d', id) WHERE codigo_qr IS NULL OR codigo_qr = '' OR codigo_qr NOT LIKE 'UBIC-%'"); } catch {}
 
 module.exports = db;

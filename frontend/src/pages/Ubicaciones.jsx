@@ -16,7 +16,6 @@ export default function Ubicaciones() {
     nombre: "",
     tipo: "BODEGA",
     responsable: "",
-    codigo_qr: "",
     activo: 1,
   });
 
@@ -100,17 +99,11 @@ export default function Ubicaciones() {
             </select>
           </label>
 
-          <label className="label" style={{ gridColumn: "1 / -1" }}>
-            Código QR (opcional)
-            <input
-              className="input"
-              value={form.codigo_qr}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, codigo_qr: e.target.value }))
-              }
-            />
-          </label>
         </div>
+
+        <p className="muted" style={{ marginTop: 10 }}>
+          El código QR se genera automáticamente (formato UBIC-0001) al guardar.
+        </p>
 
         <div
           className="row"
@@ -127,7 +120,6 @@ export default function Ubicaciones() {
                   nombre: form.nombre.trim(),
                   tipo: form.tipo,
                   responsable: form.responsable.trim() || null,
-                  codigo_qr: form.codigo_qr.trim() || null,
                   activo: form.activo,
                 });
 
@@ -135,7 +127,6 @@ export default function Ubicaciones() {
                   nombre: "",
                   tipo: "BODEGA",
                   responsable: "",
-                  codigo_qr: "",
                   activo: 1,
                 });
                 await cargar();
@@ -274,14 +265,9 @@ export default function Ubicaciones() {
               </select>
             </label>
 
-            <label className="label">
-              Código QR
-              <input
-                className="input"
-                value={edit.codigo_qr}
-                onChange={(e) => setEdit((p) => ({ ...p, codigo_qr: e.target.value }))}
-              />
-            </label>
+            {edit.codigo_qr && (
+              <p className="muted">Código QR: {edit.codigo_qr} (generado automáticamente, no editable)</p>
+            )}
 
             <div className="row" style={{ justifyContent: "flex-end" }}>
               <button className="btn-light" onClick={() => setOpenEdit(false)}>Cancelar</button>
@@ -295,7 +281,6 @@ export default function Ubicaciones() {
                       nombre: edit.nombre.trim(),
                       tipo: edit.tipo,
                       responsable: edit.responsable.trim() || null,
-                      codigo_qr: edit.codigo_qr.trim() || null,
                       activo: Number(edit.activo),
                     });
                     await cargar();
