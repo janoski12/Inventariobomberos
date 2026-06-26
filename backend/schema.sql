@@ -1,5 +1,16 @@
 PRAGMA foreign_keys = ON;
 
+-- usuarios del sistema (autenticacion)
+CREATE TABLE IF NOT EXISTS usuario (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    nombre TEXT,
+    rol TEXT NOT NULL DEFAULT 'OPERADOR',
+    activo INTEGER NOT NULL DEFAULT 1,
+    creado_en TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- bombero
 CREATE TABLE IF NOT EXISTS bombero (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

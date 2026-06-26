@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 
-export default function NavBar() {
+export default function NavBar({ esAdmin }) {
     const cls = ({ isActive }) => "nav-link" + (isActive ? " nav-link--active" : "");
     return (
         <div className="navbar">
@@ -11,6 +11,7 @@ export default function NavBar() {
             <NavLink to="/trauma" className={cls}>Trauma</NavLink>
             <NavLink to="/reportes" className={cls}>Reportes</NavLink>
             <NavLink to="/importar" className={cls}>Importar</NavLink>
+            {esAdmin && <NavLink to="/usuarios" className={cls}>Usuarios</NavLink>}
         </div>
     );
 }

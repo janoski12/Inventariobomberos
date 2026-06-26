@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { DialogProvider } from './context/DialogContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import NavBar from './components/NavBar';
 import BusquedaItems from './pages/BusquedaItems';
 import FichaItem from './pages/FichaItem';
@@ -11,16 +12,32 @@ import FichaUbicacion from "./pages/FichaUbicacion";
 import Reportes from "./pages/Reportes";
 import Importar from "./pages/Importar";
 import Trauma from "./pages/Trauma";
+import Login from "./pages/Login";
+import Usuarios from "./pages/Usuarios";
 
-function App() {
+function AppContent() {
+  const { usuario, cargando, logout, esAdmin } = useAuth();
+
+  if (cargando) {
+    return <div className="login-screen"><p className="muted">Cargando...</p></div>;
+  }
+
+  if (!usuario) {
+    return <Login />;
+  }
+
   return (
-    <DialogProvider>
     <BrowserRouter>
       <header className="app-header">
         <span className="app-header-badge">CBT10</span>
         <span className="app-header-title">Inventario Bomberos</span>
+        <div className="app-header-user">
+          <span className="app-header-rol">{usuario.rol}</span>
+          <span className="app-header-nombre">{usuario.nombre ?? usuario.username}</span>
+          <button className="btn-logout" onClick={logout}>Salir</button>
+        </div>
       </header>
-      <NavBar />
+      <NavBar esAdmin={esAdmin} />
       <main className="app-content">
         <Routes>
           <Route path="/" element={<BusquedaItems />} />
@@ -33,9 +50,19 @@ function App() {
           <Route path="/reportes" element={<Reportes />} />
           <Route path="/importar" element={<Importar />} />
           <Route path="/trauma" element={<Trauma />} />
+          {esAdmin && <Route path="/usuarios" element={<Usuarios />} />}
         </Routes>
       </main>
     </BrowserRouter>
+  );
+}
+
+function App() {
+  return (
+    <DialogProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </DialogProvider>
   );
 }

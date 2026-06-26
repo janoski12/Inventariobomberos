@@ -39,4 +39,16 @@ try {
 // codigo_qr gestionado por el sistema: formato UBIC-XXXX para todas
 try { db.exec("UPDATE ubicacion SET codigo_qr = 'UBIC-' || printf('%04d', id) WHERE codigo_qr IS NULL OR codigo_qr = '' OR codigo_qr NOT LIKE 'UBIC-%'"); } catch {}
 
+// Seed: si no existe ningun usuario, crear admin inicial (admin / admin123)
+try {
+    const { total } = db.prepare("SELECT COUNT(*) AS total FROM usuario").get();
+    if (total === 0) {
+        const bcrypt = require("bcryptjs");
+        const hash = bcrypt.hashSync("admin123", 10);
+        db.prepare("INSERT INTO usuario (username, password_hash, nombre, rol) VALUES (?, ?, ?, 'ADMIN')")
+            .run("admin", hash, "Administrador");
+        console.log("⚠️  Usuario admin inicial creado → usuario: admin / clave: admin123 (cámbiala tras el primer login)");
+    }
+} catch (e) { console.error("Error en seed de usuario:", e); }
+
 module.exports = db;

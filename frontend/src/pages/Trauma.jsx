@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { obtenerTrauma, actualizarFechasTrauma, obtenerUsosTrauma, registrarUso, eliminarUso, exportarTrauma } from "../api/trauma";
 import Modal from "../components/Modal";
 import { useDialog } from "../context/DialogContext";
+import { useAuth } from "../context/AuthContext";
 
 const CHIP_ESTADO = {
   OPERATIVO:     "chip chip--operativo",
@@ -41,6 +42,7 @@ function computarStats(items) {
 
 export default function Trauma() {
   const { toast, confirm } = useDialog();
+  const { esAdmin } = useAuth();
   const [items, setItems]       = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError]       = useState("");
@@ -298,11 +300,13 @@ export default function Trauma() {
                           {u.observacion ? ` · ${u.observacion}` : ""}
                         </div>
                       </div>
-                      <button className="btn-danger" onClick={async () => {
-                        if (!await confirm("¿Eliminar este registro?")) return;
-                        try { await eliminarUso(u.id); await cargar(); await cargarUsos(itemUsos.id); }
-                        catch (e) { toast(e.message); }
-                      }}>✕</button>
+                      {esAdmin && (
+                        <button className="btn-danger" onClick={async () => {
+                          if (!await confirm("¿Eliminar este registro?")) return;
+                          try { await eliminarUso(u.id); await cargar(); await cargarUsos(itemUsos.id); }
+                          catch (e) { toast(e.message); }
+                        }}>✕</button>
+                      )}
                     </div>
                   ))}
                 </div>

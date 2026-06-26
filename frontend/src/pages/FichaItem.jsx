@@ -4,6 +4,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { obtenerItem, obtenerMovimientos, asignarItem, cambiarEstadoItem, moverItem, actualizarItem, eliminarItem, obtenerSubcategorias, obtenerMarcas, obtenerModelos } from "../api/items";
 import CreatableSelect from "../components/CreatableSelect";
 import { useDialog } from "../context/DialogContext";
+import { useAuth } from "../context/AuthContext";
 import { listarBomberos } from "../api/bomberos";
 import { listarUbicaciones } from "../api/ubicaciones";
 import Modal from "../components/Modal";
@@ -13,6 +14,7 @@ export default function FichaItem() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast, confirm } = useDialog();
+  const { esAdmin } = useAuth();
 
   const [item, setItem] = useState(null);
   const [movs, setMovs] = useState([]);
@@ -178,20 +180,22 @@ export default function FichaItem() {
           Cambiar Estado
         </button>
 
-        <button
-          className="btn-danger"
-          onClick={async () => {
-            if (!await confirm(`¿Eliminar "${item.codigo} - ${item.descripcion}"? Se borrarán también sus movimientos y controles. Esta acción no se puede deshacer.`)) return;
-            try {
-              await eliminarItem(id);
-              navigate("/");
-            } catch (e) {
-              toast(e.message);
-            }
-          }}
-        >
-          Eliminar ítem
-        </button>
+        {esAdmin && (
+          <button
+            className="btn-danger"
+            onClick={async () => {
+              if (!await confirm(`¿Eliminar "${item.codigo} - ${item.descripcion}"? Se borrarán también sus movimientos y controles. Esta acción no se puede deshacer.`)) return;
+              try {
+                await eliminarItem(id);
+                navigate("/");
+              } catch (e) {
+                toast(e.message);
+              }
+            }}
+          >
+            Eliminar ítem
+          </button>
+        )}
 
         <button
           className="btn-light"

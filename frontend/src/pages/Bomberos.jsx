@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { actualizarBombero, crearBombero, eliminarBombero, listarBomberos } from "../api/bomberos";
 import Modal from "../components/Modal";
 import { useDialog } from "../context/DialogContext";
+import { useAuth } from "../context/AuthContext";
 
 const CARGOS = [
   "Comandante", "Director", "Capitan", "Secretario", "Prosecretario",
@@ -19,6 +20,7 @@ export default function Bomberos() {
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const { toast, confirm } = useDialog();
+  const { esAdmin } = useAuth();
   const [form, setForm]         = useState(FORM_VACIO);
   const [openEdit, setOpenEdit] = useState(false);
   const [edit, setEdit]         = useState(null);
@@ -157,18 +159,20 @@ export default function Bomberos() {
                 }}>
                   Editar
                 </button>
-                <button className="btn-danger" disabled={guardando}
-                  onClick={async () => {
-                    if (!await confirm(`¿Eliminar a ${b.nombre}? Esta acción no se puede deshacer.`)) return;
-                    try {
-                      setGuardando(true);
-                      await eliminarBombero(b.id);
-                      await cargar();
-                    } catch (e) { toast(e.message); }
-                    finally { setGuardando(false); }
-                  }}>
-                  Eliminar
-                </button>
+                {esAdmin && (
+                  <button className="btn-danger" disabled={guardando}
+                    onClick={async () => {
+                      if (!await confirm(`¿Eliminar a ${b.nombre}? Esta acción no se puede deshacer.`)) return;
+                      try {
+                        setGuardando(true);
+                        await eliminarBombero(b.id);
+                        await cargar();
+                      } catch (e) { toast(e.message); }
+                      finally { setGuardando(false); }
+                    }}>
+                    Eliminar
+                  </button>
+                )}
               </div>
             </div>
           </div>

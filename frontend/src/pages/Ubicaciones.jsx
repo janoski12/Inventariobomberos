@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { actualizarUbicacion, crearUbicacion, eliminarUbicacion, listarUbicaciones, descargarQR } from "../api/ubicaciones";
 import Modal from "../components/Modal";
 import { useDialog } from "../context/DialogContext";
+import { useAuth } from "../context/AuthContext";
 
 const TIPOS = ["BODEGA", "SALA", "SALON", "CONTAINER", "CARRO", "CASILLERO", "OTRO"];
 
@@ -20,6 +21,7 @@ export default function Ubicaciones() {
   });
 
   const { toast, confirm } = useDialog();
+  const { esAdmin } = useAuth();
   const [openEdit, setOpenEdit] = useState(false);
   const [edit, setEdit] = useState(null);
 
@@ -196,24 +198,26 @@ export default function Ubicaciones() {
                 >
                   Editar
                 </button>
-                <button
-                  className="btn-danger"
-                  disabled={guardando}
-                  onClick={async () => {
-                    if (!await confirm(`¿Eliminar "${u.nombre}"? Esta acción no se puede deshacer.`)) return;
-                    try {
-                      setGuardando(true);
-                      await eliminarUbicacion(u.id);
-                      await cargar();
-                    } catch (e) {
-                      toast(e.message);
-                    } finally {
-                      setGuardando(false);
-                    }
-                  }}
-                >
-                  Eliminar
-                </button>
+                {esAdmin && (
+                  <button
+                    className="btn-danger"
+                    disabled={guardando}
+                    onClick={async () => {
+                      if (!await confirm(`¿Eliminar "${u.nombre}"? Esta acción no se puede deshacer.`)) return;
+                      try {
+                        setGuardando(true);
+                        await eliminarUbicacion(u.id);
+                        await cargar();
+                      } catch (e) {
+                        toast(e.message);
+                      } finally {
+                        setGuardando(false);
+                      }
+                    }}
+                  >
+                    Eliminar
+                  </button>
+                )}
               </div>
             </div>
           </div>
