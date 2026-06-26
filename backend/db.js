@@ -2,9 +2,12 @@ const fs = require("fs");
 const path = require("path");
 const Database = require("better-sqlite3");
 
-const dataDir = path.join(__dirname, "data");
-const dbPath = path.join(dataDir, "inventario.db");
 const schemaPath = path.join(__dirname, "schema.sql");
+
+// El path de la BD es configurable (DB_PATH) para que los tests usen
+// una base temporal aislada. Por defecto: data/inventario.db
+const dbPath = process.env.DB_PATH || path.join(__dirname, "data", "inventario.db");
+const dataDir = path.dirname(dbPath);
 
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true});
 

@@ -25,6 +25,10 @@ app.use(require("./routes/trauma"));
 app.use(require("./routes/reportes"));
 app.use(require("./routes/importar"));
 
-// Iniciar servidor
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`API Inventario corriendo en http://localhost:${PORT}`));
+// Iniciar servidor solo si se ejecuta directamente (no al importar en tests)
+if (require.main === module) {
+    const PORT = process.env.PORT || 3001;
+    app.listen(PORT, () => console.log(`API Inventario corriendo en http://localhost:${PORT}`));
+}
+
+module.exports = app;
