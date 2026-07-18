@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { DialogProvider } from './context/DialogContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import NavBar from './components/NavBar';
+import CambiarPassword from './components/CambiarPassword';
 import BusquedaItems from './pages/BusquedaItems';
 import FichaItem from './pages/FichaItem';
 import NuevoItem from "./pages/NuevoItem";
@@ -17,6 +19,7 @@ import Usuarios from "./pages/Usuarios";
 
 function AppContent() {
   const { usuario, cargando, logout, esAdmin } = useAuth();
+  const [openPassword, setOpenPassword] = useState(false);
 
   if (cargando) {
     return <div className="login-screen"><p className="muted">Cargando...</p></div>;
@@ -33,10 +36,17 @@ function AppContent() {
         <span className="app-header-title">Inventario Bomberos</span>
         <div className="app-header-user">
           <span className="app-header-rol">{usuario.rol}</span>
-          <span className="app-header-nombre">{usuario.nombre ?? usuario.username}</span>
+          <button
+            className="app-header-nombre app-header-nombre--btn"
+            title="Cambiar mi contraseña"
+            onClick={() => setOpenPassword(true)}
+          >
+            {usuario.nombre ?? usuario.username}
+          </button>
           <button className="btn-logout" onClick={logout}>Salir</button>
         </div>
       </header>
+      <CambiarPassword open={openPassword} onClose={() => setOpenPassword(false)} />
       <NavBar esAdmin={esAdmin} />
       <main className="app-content">
         <Routes>

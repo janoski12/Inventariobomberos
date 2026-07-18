@@ -1,4 +1,5 @@
 import { API_URL } from "./config";
+import { fechaLocalISO } from "../utils/fechas";
 
 export async function importarExcel(file) {
   const fd = new FormData();
@@ -27,7 +28,7 @@ export async function descargarPlantillaParcial(seccion) {
 }
 
 export async function descargarBackup() {
-  const fecha = new Date().toISOString().slice(0, 10);
+  const fecha = fechaLocalISO();
   await _descargarArchivo(`${API_URL}/backup`, `inventario_backup_${fecha}.db`);
 }
 

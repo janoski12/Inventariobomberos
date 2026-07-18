@@ -11,7 +11,7 @@ fechas de vencimiento y registro de uso.
   criticidad, marca/modelo (con autocompletado), serie y fecha de fabricación
   (con cálculo de tiempo en servicio).
 - **Asignación y trazabilidad** — cada ítem se asigna a un bombero o ubicación;
-  todo movimiento queda registrado en su historial.
+  todo movimiento queda registrado en su historial a nombre del usuario que lo hizo.
 - **Bomberos** — gestión con RUT y N° de registro únicos, cargo y ficha con sus
   ítems asignados.
 - **Ubicaciones** — gestión con código QR generado automáticamente (`UBIC-XXXX`),
@@ -99,8 +99,9 @@ usuario:  admin
 clave:    admin123
 ```
 
-> **Cambia esta contraseña** tras el primer login, desde la pestaña **Usuarios →
-> Editar**. Antes de desplegar, define también un `JWT_SECRET` propio.
+> **Cambia esta contraseña** tras el primer login: haz clic en tu nombre en la
+> cabecera (o pide a un admin editarla en **Usuarios**). Antes de desplegar,
+> define también un `JWT_SECRET` propio.
 
 ### Roles
 
@@ -131,8 +132,12 @@ Basta con:
 
 ## Respaldo y restauración
 
-- **Respaldo** *(solo admin)*: pestaña *Importar → Descargar respaldo de la BD* (genera un `.db`).
-- **Restaurar**: con el backend detenido, reemplaza `backend/data/inventario.db`
+- **Automático**: al arrancar y cada 24 h el servidor guarda una copia en
+  `backend/data/backups/` (conserva las 14 más recientes). Antes de cada carga
+  completa desde Excel se guarda además un respaldo `pre_carga_completa_*`.
+- **Manual** *(solo admin)*: pestaña *Importar → Descargar respaldo de la BD*
+  (genera un `.db`). Recomendado para guardar copias fuera del equipo.
+- **Restaurar**: con el servidor detenido, reemplaza `backend/data/inventario.db`
   por el archivo de respaldo.
 
 ## Estructura

@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS usuario (
     nombre TEXT,
     rol TEXT NOT NULL DEFAULT 'OPERADOR',
     activo INTEGER NOT NULL DEFAULT 1,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now'))
+    creado_en TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
 -- bombero
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS bombero (
     cargo TEXT,
     estado TEXT NOT NULL DEFAULT 'ACTIVO',
     observaciones TEXT,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now'))
+    creado_en TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
 -- los imports parciales upsertan por nombre: debe ser unico
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS ubicacion (
     responsable TEXT,
     codigo_qr TEXT,
     activo INTEGER NOT NULL DEFAULT 1,
-    creado_en TEXT NOT NULL DEFAULT (datetime('now'))
+    creado_en TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ubicacion_nombre ON ubicacion(nombre);
@@ -53,8 +53,8 @@ CREATE TABLE IF NOT EXISTS item (
     ubicacion_actual_id INTEGER,
     asignado_bombero_id INTEGER,
 
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
-    actualizado_en TEXT NOT NULL DEFAULT(datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    actualizado_en TEXT NOT NULL DEFAULT(datetime('now','localtime')),
 
     FOREIGN KEY (ubicacion_actual_id) REFERENCES ubicacion(id),
     FOREIGN KEY (asignado_bombero_id) REFERENCES bombero(id)
@@ -67,7 +67,7 @@ CREATE INDEX IF NOT EXISTS idx_item_ubicacion ON item(ubicacion_actual_id);
 --moviemientos
 CREATE TABLE IF NOT EXISTS movimiento (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    fecha TEXT NOT NULL DEFAULT (datetime('now')),
+    fecha TEXT NOT NULL DEFAULT (datetime('now','localtime')),
     item_id INTEGER NOT NULL,
 
     tipo TEXT NOT NULL,
@@ -93,7 +93,7 @@ CREATE TABLE IF NOT EXISTS control (
     resultado TEXT,
     observacion TEXT,
 
-    creado_en TEXT NOT NULL DEFAULT (datetime('now')),
+    creado_en TEXT NOT NULL DEFAULT (datetime('now','localtime')),
 
     FOREIGN KEY (item_id) REFERENCES item(id)
 );
@@ -104,7 +104,7 @@ CREATE INDEX IF NOT EXISTS idx_control_objetivo ON control(tipo, fecha_objetivo)
 CREATE TABLE IF NOT EXISTS uso_trauma (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     item_id     INTEGER NOT NULL,
-    fecha       TEXT NOT NULL DEFAULT (date('now')),
+    fecha       TEXT NOT NULL DEFAULT (date('now','localtime')),
     cantidad    INTEGER NOT NULL DEFAULT 1,
     motivo      TEXT,
     responsable TEXT,

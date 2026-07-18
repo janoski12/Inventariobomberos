@@ -1,4 +1,5 @@
 import { API_URL } from "./config";
+import { fechaLocalISO } from "../utils/fechas";
 
 async function request(url, options) {
   const res = await fetch(url, options);
@@ -33,7 +34,7 @@ export async function exportarTrauma() {
   const res = await fetch(`${API_URL}/trauma/exportar`);
   if (!res.ok) throw new Error(`Error ${res.status}`);
   const blob = await res.blob();
-  const fecha = new Date().toISOString().slice(0, 10);
+  const fecha = fechaLocalISO();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

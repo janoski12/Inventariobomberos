@@ -92,6 +92,15 @@ h1, h2, h3 { margin: 0; }
     font-size: 13px;
     color: var(--text-dim);
 }
+/* El nombre es un boton: abre el modal de cambio de contraseña */
+.app-header-nombre--btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+}
+.app-header-nombre--btn:hover { color: var(--text); text-decoration: underline; }
 .btn-logout {
     background: transparent;
     border: 1px solid var(--border);

@@ -195,3 +195,106 @@ describe("Protección del último administrador", () => {
         assert.equal(res.status, 400);
     });
 });
+
+describe("Trazabilidad atribuida al usuario logueado", () => {
+    test("mover un ítem registra el movimiento a nombre del usuario", async () => {
+        const ubic = await request(app).post("/api/ubicaciones").set(auth(adminToken))
+            .send({ nombre: "Bodega Trazas", tipo: "BODEGA" });
+        const item = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ codigo: "TRZ-001", categoria: "EPP", descripcion: "Casco trazas" });
+
+        const mov = await request(app).post(`/api/items/${item.body.id}/mover`).set(auth(adminToken))
+            .send({ ubicacion_id: ubic.body.id, responsable: "Texto que debe ignorarse" });
+        assert.equal(mov.status, 200);
+
+        const movs = await request(app).get(`/api/items/${item.body.id}/movimientos`).set(auth(adminToken));
+        assert.equal(movs.body[0].tipo, "MOVIMIENTO", "el más reciente va primero");
+        const traslado = movs.body.find(m => m.tipo === "MOVIMIENTO");
+        assert.equal(traslado.responsable, "Administrador");
+    });
+});
+
+describe("Ubicaciones inactivas", () => {
+    test("una ubicación desactivada sigue visible con ?todas=1 y puede reactivarse", async () => {
+        const crea = await request(app).post("/api/ubicaciones").set(auth(adminToken))
+            .send({ nombre: "Bodega Clausurada", tipo: "BODEGA" });
+        const id = crea.body.id;
+
+        await request(app).put(`/api/ubicaciones/${id}`).set(auth(adminToken)).send({ activo: 0 });
+
+        const activas = await request(app).get("/api/ubicaciones").set(auth(adminToken));
+        assert.ok(!activas.body.some(u => u.id === id), "no debe aparecer en el listado por defecto");
+
+        const todas = await request(app).get("/api/ubicaciones?todas=1").set(auth(adminToken));
+        assert.ok(todas.body.some(u => u.id === id && u.activo === 0), "debe aparecer con ?todas=1");
+
+        const react = await request(app).put(`/api/ubicaciones/${id}`).set(auth(adminToken)).send({ activo: 1 });
+        assert.equal(react.status, 200);
+        const activas2 = await request(app).get("/api/ubicaciones").set(auth(adminToken));
+        assert.ok(activas2.body.some(u => u.id === id), "reactivada vuelve al listado");
+    });
+});
+
+describe("Errores controlados", () => {
+    test("JSON malformado → 400 JSON (no HTML)", async () => {
+        const res = await request(app).post("/api/auth/login")
+            .set("Content-Type", "application/json")
+            .send('{"username": "admin", ');
+        assert.equal(res.status, 400);
+        assert.ok(res.body.error);
+    });
+});
+
+describe("Cambio de contraseña propio", () => {
+    test("flujo completo: crear usuario, cambiar clave y reloguear", async () => {
+        await request(app).post("/api/usuarios").set(auth(adminToken))
+            .send({ username: "cambia_clave", password: "clave1", nombre: "Cambia Clave", rol: "OPERADOR" });
+        const login = await request(app).post("/api/auth/login").send({ username: "cambia_clave", password: "clave1" });
+        const token = login.body.token;
+
+        const mala = await request(app).put("/api/auth/password").set(auth(token))
+            .send({ actual: "incorrecta", nueva: "clave2nueva" });
+        assert.equal(mala.status, 401);
+
+        const ok = await request(app).put("/api/auth/password").set(auth(token))
+            .send({ actual: "clave1", nueva: "clave2nueva" });
+        assert.equal(ok.status, 200);
+
+        const reloginViejo = await request(app).post("/api/auth/login").send({ username: "cambia_clave", password: "clave1" });
+        assert.equal(reloginViejo.status, 401);
+        const reloginNuevo = await request(app).post("/api/auth/login").send({ username: "cambia_clave", password: "clave2nueva" });
+        assert.equal(reloginNuevo.status, 200);
+    });
+});
+
+describe("Importación parcial de ítems", () => {
+    test("celdas de asignación vacías conservan la asignación actual", async () => {
+        const xlsx = require("xlsx");
+
+        const bom = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero Importa" });
+        const item = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ codigo: "IMP-001", categoria: "EPP", descripcion: "Casco importado", asignado_bombero_id: bom.body.id });
+        assert.equal(item.status, 201);
+
+        // Excel con el mismo código pero ubicación/bombero vacíos (caso típico de re-importación)
+        const filas = [{
+            codigo: "IMP-001", categoria: "EPP", subcategoria: "", descripcion: "Casco importado v2",
+            marca: "", modelo: "", serie: "", estado: "OPERATIVO", criticidad: "ALTA",
+            ubicacion_nombre: "", bombero_nombre: "",
+            fecha_fabricacion: "", fecha_recepcion: "", fecha_vencimiento: "",
+        }];
+        const wb = xlsx.utils.book_new();
+        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet(filas), "Items");
+        const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+
+        const imp = await request(app).post("/api/importar/items").set(auth(adminToken))
+            .attach("archivo", buf, "items.xlsx");
+        assert.equal(imp.status, 200);
+        assert.equal(imp.body.resumen.actualizados, 1);
+
+        const ficha = await request(app).get(`/api/items/${item.body.id}`).set(auth(adminToken));
+        assert.equal(ficha.body.asignado_bombero_id, bom.body.id, "debe conservar el bombero asignado");
+        assert.equal(ficha.body.descripcion, "Casco importado v2", "los demás campos sí se actualizan");
+        assert.equal(ficha.body.criticidad, "ALTA");
+    });
+});

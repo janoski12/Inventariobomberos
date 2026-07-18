@@ -14,8 +14,8 @@ const json = (payload) => ({
   body: JSON.stringify(payload),
 });
 
-export function listarUbicaciones() {
-  return request(`${API_URL}/ubicaciones`);
+export function listarUbicaciones({ todas = false } = {}) {
+  return request(`${API_URL}/ubicaciones${todas ? "?todas=1" : ""}`);
 }
 
 export function crearUbicacion(payload) {

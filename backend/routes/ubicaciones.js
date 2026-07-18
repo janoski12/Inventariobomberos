@@ -86,9 +86,11 @@ router.put("/ubicaciones/:id", (req, res) => {
     }
 });
 
-//Listar ubicaciones
+// Listar ubicaciones. Por defecto solo las activas (dropdowns de asignacion);
+// con ?todas=1 incluye las inactivas (pagina de gestion, para poder reactivarlas)
 router.get("/ubicaciones", (req, res) => {
-    const rows = db.prepare("SELECT * FROM ubicacion WHERE activo=1 ORDER BY nombre").all();
+    const where = req.query.todas === "1" ? "" : "WHERE activo=1";
+    const rows = db.prepare(`SELECT * FROM ubicacion ${where} ORDER BY activo DESC, nombre`).all();
     res.json(rows);
 });
 

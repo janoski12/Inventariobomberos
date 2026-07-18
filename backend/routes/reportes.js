@@ -1,11 +1,11 @@
 const router = require("express").Router();
 const db = require("../db");
-const { serverError } = require("../lib/helpers");
+const { serverError, fechaLocalISO } = require("../lib/helpers");
 
 router.get("/reportes", (_req, res) => {
     try {
-        const hoy = new Date().toISOString().slice(0, 10);
-        const en30dias = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const hoy = fechaLocalISO();
+        const en30dias = fechaLocalISO(30);
 
         const porEstado = db.prepare(`
             SELECT estado, COUNT(*) AS total FROM item GROUP BY estado

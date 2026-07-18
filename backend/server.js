@@ -38,9 +38,22 @@ if (fs.existsSync(path.join(DIST, "index.html"))) {
     console.warn("Aviso: no existe frontend/dist — solo se sirve la API. Para servir la app ejecuta 'npm run build' en frontend/.");
 }
 
+// Errores no capturados responden JSON (nunca HTML con stack trace)
+app.use((err, req, res, _next) => {
+    if (err?.type === "entity.parse.failed")
+        return res.status(400).json({ error: "El cuerpo de la petición no es JSON válido" });
+    if (err?.name === "MulterError")
+        return res.status(400).json({
+            error: err.code === "LIMIT_FILE_SIZE" ? "El archivo supera el límite de 10 MB" : "Error procesando el archivo",
+        });
+    console.error(err);
+    res.status(500).json({ error: "Error interno del servidor" });
+});
+
 // Iniciar servidor solo si se ejecuta directamente (no al importar en tests)
 if (require.main === module) {
     const PORT = process.env.PORT || 3001;
+    require("./lib/backups").iniciarBackupsAutomaticos();
     app.listen(PORT, () => console.log(`Inventario CBT10 corriendo en http://localhost:${PORT}`));
 }
 

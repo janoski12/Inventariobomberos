@@ -156,7 +156,7 @@ export default function Importar() {
           titulo="Ítems"
           descripcion="Upsert por código. Incluye fechas (fabricación, recepción, vencimiento) y hoja Controles (opcional, siempre aditiva)."
           seccion="items"
-          nota="Los bomberos y ubicaciones referenciados deben existir en el sistema antes de importar. Las fechas aceptan formato AAAA-MM-DD o DD/MM/AAAA; si vienen vacías no borran las existentes."
+          nota="Los bomberos y ubicaciones referenciados deben existir en el sistema antes de importar. Las fechas aceptan formato AAAA-MM-DD o DD/MM/AAAA; si vienen vacías no borran las existentes. Si ubicación y bombero vienen vacíos, el ítem conserva su asignación actual."
         />
       </div>
     </div>

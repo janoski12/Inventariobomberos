@@ -4,6 +4,7 @@ import { obtenerTrauma, actualizarFechasTrauma, obtenerUsosTrauma, registrarUso,
 import Modal from "../components/Modal";
 import { useDialog } from "../context/DialogContext";
 import { useAuth } from "../context/AuthContext";
+import { fechaLocalISO } from "../utils/fechas";
 
 const CHIP_ESTADO = {
   OPERATIVO:     "chip chip--operativo",
@@ -21,16 +22,16 @@ function formatFecha(iso) {
 
 function estadoVenc(fecha) {
   if (!fecha) return { label: "Sin fecha", cls: "venc-sin-fecha" };
-  const hoy  = new Date().toISOString().slice(0, 10);
-  const en30 = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const hoy  = fechaLocalISO();
+  const en30 = fechaLocalISO(30);
   if (fecha < hoy)   return { label: "VENCIDO",    cls: "venc-vencido" };
   if (fecha <= en30) return { label: "POR VENCER", cls: "venc-proximo" };
   return               { label: "VIGENTE",     cls: "venc-vigente" };
 }
 
 function computarStats(items) {
-  const hoy  = new Date().toISOString().slice(0, 10);
-  const en30 = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const hoy  = fechaLocalISO();
+  const en30 = fechaLocalISO(30);
   let vencidos = 0, proximos = 0, sinFecha = 0;
   for (const it of items) {
     if (!it.fecha_vencimiento)             sinFecha++;
@@ -96,7 +97,7 @@ export default function Trauma() {
 
   function abrirUsos(item) {
     setItemUsos(item);
-    setFormUso({ fecha: new Date().toISOString().slice(0, 10), cantidad: 1, motivo: "", responsable: "", observacion: "" });
+    setFormUso({ fecha: fechaLocalISO(), cantidad: 1, motivo: "", responsable: "", observacion: "" });
     setUsos([]);
     setOpenUsos(true);
     cargarUsos(item.id);
@@ -272,7 +273,7 @@ export default function Trauma() {
                       });
                       await cargar();
                       await cargarUsos(itemUsos.id);
-                      setFormUso({ fecha: new Date().toISOString().slice(0, 10), cantidad: 1, motivo: "", responsable: "", observacion: "" });
+                      setFormUso({ fecha: fechaLocalISO(), cantidad: 1, motivo: "", responsable: "", observacion: "" });
                     } catch (e) { toast(e.message); }
                     finally { setGuardandoUso(false); }
                   }}>

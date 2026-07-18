@@ -1,6 +1,7 @@
 const router = require("express").Router();
 const db = require("../db");
-const { ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, isNil, cleanText, badRequest, notFound, conflict, serverError, esFechaValida } = require("../lib/helpers");
+const { ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, isNil, cleanText, badRequest, notFound, conflict, serverError, esFechaValida, fechaLocalISO } = require("../lib/helpers");
+const { quienRegistra } = require("../lib/auth");
 
 //Crear items
 router.post("/items", (req, res) => {
@@ -72,9 +73,9 @@ router.post("/items", (req, res) => {
                     : "Sin asignar";
 
             db.prepare(`
-                INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion)
-                VALUES (?, 'CREACION', 'Nuevo item', ?, 'Sistema', NULL)
-            `).run(itemId, hacia);
+                INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha)
+                VALUES (?, 'CREACION', 'Nuevo item', ?, ?, NULL, datetime('now','localtime'))
+            `).run(itemId, hacia, quienRegistra(req));
 
             return itemId;
         })();
@@ -178,7 +179,7 @@ router.put("/items/:id", (req, res) => {
             modelo=?,
             serie=?,
             criticidad=?,
-            actualizado_en=datetime('now')
+            actualizado_en=datetime('now','localtime')
             WHERE id=?
         `).run(
             codigo,
@@ -206,7 +207,7 @@ router.get("/items/:id/movimientos", (req, res) => {
             SELECT *
             FROM movimiento
             WHERE item_id = ?
-            ORDER BY datetime(fecha) DESC
+            ORDER BY datetime(fecha) DESC, id DESC
             LIMIT 200
     `).all(id);
 
@@ -276,7 +277,7 @@ router.get("/items/exportar", (req, res) => {
         xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet(datos), "Inventario");
         const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
 
-        const fecha = new Date().toISOString().slice(0, 10);
+        const fecha = fechaLocalISO();
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename="inventario_${fecha}.xlsx"`);
         res.send(buf);
@@ -327,7 +328,7 @@ router.post("/items/:id/asignar", (req, res) => {
     try {
         const id = Number(req.params.id);
         const bombero_id = Number(req.body.bombero_id);
-        const responsable = cleanText(req.body.responsable) || "Sistema";
+        const responsable = quienRegistra(req);
         const observacion = cleanText(req.body.observacion);
 
         if (!Number.isInteger(id) || id <= 0){
@@ -350,8 +351,8 @@ router.post("/items/:id/asignar", (req, res) => {
                 : "Sin asignación";
 
         const trx = db.transaction(() => {
-            db.prepare(`UPDATE item SET asignado_bombero_id=?, ubicacion_actual_id=NULL, actualizado_en=datetime('now') WHERE id=?`).run(bombero_id, id);
-            db.prepare(`INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion) VALUES (?, 'ASIGNACION', ?, ?, ?, ?)`)
+            db.prepare(`UPDATE item SET asignado_bombero_id=?, ubicacion_actual_id=NULL, actualizado_en=datetime('now','localtime') WHERE id=?`).run(bombero_id, id);
+            db.prepare(`INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha) VALUES (?, 'ASIGNACION', ?, ?, ?, ?, datetime('now','localtime'))`)
                 .run(id, desdeAsignar, `Asignado a ${bombero.nombre}`, responsable, observacion ?? null);
         });
 
@@ -366,7 +367,7 @@ router.post("/items/:id/mover", (req, res) => {
     try {
         const id = Number(req.params.id);
         const ubicacion_id = Number(req.body.ubicacion_id);
-        const responsable = cleanText(req.body.responsable) || "Sistema";
+        const responsable = quienRegistra(req);
         const observacion = cleanText(req.body.observacion);
 
         if (!Number.isInteger(id) || id <= 0){ return badRequest(res, "ID de item inválido"); }
@@ -387,8 +388,8 @@ router.post("/items/:id/mover", (req, res) => {
                 : "Sin asignación";
 
         const trx = db.transaction(() => {
-            db.prepare(`UPDATE item SET ubicacion_actual_id=?, asignado_bombero_id=NULL, actualizado_en=datetime('now') WHERE id=?`).run(ubicacion_id, id);
-            db.prepare(`INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion) VALUES (?, 'MOVIMIENTO', ?, ?, ?, ?)`)
+            db.prepare(`UPDATE item SET ubicacion_actual_id=?, asignado_bombero_id=NULL, actualizado_en=datetime('now','localtime') WHERE id=?`).run(ubicacion_id, id);
+            db.prepare(`INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha) VALUES (?, 'MOVIMIENTO', ?, ?, ?, ?, datetime('now','localtime'))`)
                 .run(id, desdeMover, `Ubicado en ${ubicacion.nombre}`, responsable, observacion);
         });
 
@@ -403,7 +404,7 @@ router.post("/items/:id/estado", (req, res) => {
     try {
         const id = Number(req.params.id);
         const estado = cleanText(req.body.estado);
-        const responsable = cleanText(req.body.responsable) || "Sistema";
+        const responsable = quienRegistra(req);
         const observacion = cleanText(req.body.observacion);
 
         if (!Number.isInteger(id) || id <= 0){ return badRequest(res, "ID de item inválido"); }
@@ -417,10 +418,10 @@ router.post("/items/:id/estado", (req, res) => {
 
         const trx = db.transaction(() => {
             //update
-            db.prepare(`UPDATE item SET estado=?, actualizado_en=datetime('now') WHERE id=?`).run(estado, id);
+            db.prepare(`UPDATE item SET estado=?, actualizado_en=datetime('now','localtime') WHERE id=?`).run(estado, id);
 
             //movimiento
-            db.prepare(`INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion) VALUES (?, 'CAMBIO_ESTADO', ?, ?, ?, ?)`)
+            db.prepare(`INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha) VALUES (?, 'CAMBIO_ESTADO', ?, ?, ?, ?, datetime('now','localtime'))`)
                 .run(
                     id,
                     item.estado,

@@ -1,17 +1,25 @@
 const router = require("express").Router();
 const db = require("../db");
-const { requireAdmin } = require("../lib/auth");
+const { requireAdmin, quienRegistra } = require("../lib/auth");
 const {
     upload, ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, ESTADOS_BOMBERO, TIPOS_UBICACION, TIPOS_CONTROL,
-    badRequest, serverError, normXlsx, normFechaXlsx, parseXlsxBuffer,
+    badRequest, serverError, normXlsx, normFechaXlsx, parseXlsxBuffer, fechaLocalISO,
 } = require("../lib/helpers");
+const { crearBackup } = require("../lib/backups");
 
 // Importar desde Excel (carga completa: borra y reemplaza todo) — solo admin
-router.post("/importar", requireAdmin, upload.single("archivo"), (req, res) => {
+router.post("/importar", requireAdmin, upload.single("archivo"), async (req, res) => {
     if (!req.file) return badRequest(res, "No se recibió ningún archivo");
 
     const ext = req.file.originalname.split(".").pop().toLowerCase();
     if (ext !== "xlsx" && ext !== "xls") return badRequest(res, "El archivo debe ser .xlsx o .xls");
+
+    // Red de seguridad: respaldo automatico en disco ANTES de borrar todo
+    try {
+        await crearBackup("pre_carga_completa");
+    } catch (e) {
+        return serverError(res, e, "No se pudo crear el respaldo previo; la importación fue cancelada");
+    }
 
     try {
         const xlsx = require("xlsx");
@@ -57,7 +65,7 @@ router.post("/importar", requireAdmin, upload.single("archivo"), (req, res) => {
         const insBombero   = db.prepare(`INSERT INTO bombero (nombre, cargo, estado, observaciones) VALUES (?, ?, ?, ?)`);
         const insItem      = db.prepare(`INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id, fecha_fabricacion, fecha_recepcion, fecha_vencimiento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         const insControl   = db.prepare(`INSERT INTO control (item_id, tipo, fecha_objetivo, fecha_real, resultado, observacion) VALUES (?, ?, ?, ?, ?, ?)`);
-        const insMov       = db.prepare(`INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`);
+        const insMov       = db.prepare(`INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha) VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))`);
 
         db.transaction(() => {
             db.prepare("DELETE FROM uso_trauma").run();
@@ -113,7 +121,7 @@ router.post("/importar", requireAdmin, upload.single("archivo"), (req, res) => {
 
             for (const r of db.prepare(`SELECT it.id, u.nombre AS ubic, b.nombre AS bom FROM item it LEFT JOIN ubicacion u ON u.id = it.ubicacion_actual_id LEFT JOIN bombero b ON b.id = it.asignado_bombero_id`).all()) {
                 const hacia = r.bom ? `Asignado a ${r.bom}` : r.ubic ? `Ubicado en ${r.ubic}` : "Sin ubicación";
-                insMov.run(r.id, "ALTA", "Carga inicial", hacia, "Sistema", "Importación desde Excel");
+                insMov.run(r.id, "ALTA", "Carga inicial", hacia, quienRegistra(req), "Importación desde Excel");
             }
         })();
 
@@ -358,11 +366,17 @@ router.post("/importar/items", upload.single("archivo"), (req, res) => {
         if (errores.length > 0)
             return res.status(400).json({ error: `Referencias no encontradas:\n${errores.map(e => "• " + e).join("\n")}` });
 
-        const getItem = db.prepare("SELECT id FROM item WHERE codigo = ?");
+        const getItem = db.prepare("SELECT id, ubicacion_actual_id, asignado_bombero_id FROM item WHERE codigo = ?");
         const insItem = db.prepare("INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id, fecha_fabricacion, fecha_recepcion, fecha_vencimiento) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        const updItem = db.prepare("UPDATE item SET categoria=?, subcategoria=?, descripcion=?, marca=?, modelo=?, serie=?, estado=?, criticidad=?, ubicacion_actual_id=?, asignado_bombero_id=?, fecha_fabricacion=COALESCE(?, fecha_fabricacion), fecha_recepcion=COALESCE(?, fecha_recepcion), fecha_vencimiento=COALESCE(?, fecha_vencimiento), actualizado_en=datetime('now') WHERE codigo=?");
-        const insMov  = db.prepare("INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))");
+        const updItem = db.prepare("UPDATE item SET categoria=?, subcategoria=?, descripcion=?, marca=?, modelo=?, serie=?, estado=?, criticidad=?, ubicacion_actual_id=?, asignado_bombero_id=?, fecha_fabricacion=COALESCE(?, fecha_fabricacion), fecha_recepcion=COALESCE(?, fecha_recepcion), fecha_vencimiento=COALESCE(?, fecha_vencimiento), actualizado_en=datetime('now','localtime') WHERE codigo=?");
+        const insMov  = db.prepare("INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha) VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))");
         const insCtrl = db.prepare("INSERT INTO control (item_id, tipo, fecha_objetivo, fecha_real, resultado, observacion) VALUES (?, ?, ?, ?, ?, ?)");
+
+        // Mapas inversos (id → nombre) para describir la asignacion previa en el movimiento
+        const ubicPorId = new Map();
+        for (const [nombre, uid] of ubicMap) ubicPorId.set(uid, nombre);
+        const bomPorId = new Map();
+        for (const [nombre, bid] of bomMap) bomPorId.set(bid, nombre);
 
         let insertados = 0, actualizados = 0, controles = 0;
 
@@ -387,12 +401,28 @@ router.post("/importar/items", upload.single("archivo"), (req, res) => {
 
                 const existente = getItem.get(codigo);
                 if (existente) {
-                    updItem.run(categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicId, bomId, fechaFab, fechaRec, fechaVenc, codigo);
+                    // Celdas de asignacion vacias => se conserva la asignacion actual del item
+                    // (el Excel solo cambia la asignacion cuando indica un valor explicito)
+                    const sinAsignacion = !ubicNombre && !bomNombre;
+                    const nuevoUbicId = sinAsignacion ? existente.ubicacion_actual_id : ubicId;
+                    const nuevoBomId  = sinAsignacion ? existente.asignado_bombero_id : bomId;
+
+                    updItem.run(categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, nuevoUbicId, nuevoBomId, fechaFab, fechaRec, fechaVenc, codigo);
+
+                    if (nuevoUbicId !== existente.ubicacion_actual_id || nuevoBomId !== existente.asignado_bombero_id) {
+                        const desde = existente.asignado_bombero_id
+                            ? `Asignado a ${bomPorId.get(existente.asignado_bombero_id) ?? "Bombero desconocido"}`
+                            : existente.ubicacion_actual_id
+                                ? `Ubicado en ${ubicPorId.get(existente.ubicacion_actual_id) ?? "Ubicación desconocida"}`
+                                : "Sin asignación";
+                        const hacia = nuevoBomId ? `Asignado a ${bomNombre}` : `Ubicado en ${ubicNombre}`;
+                        insMov.run(existente.id, nuevoBomId ? "ASIGNACION" : "MOVIMIENTO", desde, hacia, quienRegistra(req), "Importación parcial desde Excel");
+                    }
                     actualizados++;
                 } else {
                     const info  = insItem.run(codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicId, bomId, fechaFab, fechaRec, fechaVenc);
                     const hacia = bomId  ? `Asignado a ${bomNombre}` : ubicId ? `Ubicado en ${ubicNombre}` : "Sin ubicar";
-                    insMov.run(info.lastInsertRowid, "ALTA", "Importación parcial", hacia, "Sistema", "Importación parcial desde Excel");
+                    insMov.run(info.lastInsertRowid, "ALTA", "Importación parcial", hacia, quienRegistra(req), "Importación parcial desde Excel");
                     insertados++;
                 }
             }
@@ -421,7 +451,7 @@ router.get("/backup", requireAdmin, async (_req, res) => {
     const tmpFile = path.join(__dirname, "..", "data", `backup_tmp_${Date.now()}.db`);
     try {
         await db.backup(tmpFile);
-        const fecha = new Date().toISOString().slice(0, 10);
+        const fecha = fechaLocalISO();
         res.setHeader("Content-Type", "application/octet-stream");
         res.setHeader("Content-Disposition", `attachment; filename="inventario_backup_${fecha}.db"`);
         res.sendFile(tmpFile, (err) => {

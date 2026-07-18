@@ -35,4 +35,9 @@ function requireAdmin(req, res, next) {
     next();
 }
 
-module.exports = { firmarToken, requireAuth, requireAdmin, JWT_SECRET };
+// Nombre con el que se registra al usuario autenticado en la trazabilidad
+function quienRegistra(req) {
+    return req.usuario?.nombre || req.usuario?.username || "Sistema";
+}
+
+module.exports = { firmarToken, requireAuth, requireAdmin, quienRegistra, JWT_SECRET };

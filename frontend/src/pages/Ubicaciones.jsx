@@ -29,7 +29,7 @@ export default function Ubicaciones() {
     setError("");
     setCargando(true);
     try {
-      const data = await listarUbicaciones();
+      const data = await listarUbicaciones({ todas: true });
       setLista(data);
     } catch (e) {
       console.error(e);

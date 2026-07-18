@@ -1,6 +1,6 @@
 const router = require("express").Router();
 const db = require("../db");
-const { cleanText, badRequest, notFound, serverError, esFechaValida } = require("../lib/helpers");
+const { cleanText, badRequest, notFound, serverError, esFechaValida, fechaLocalISO } = require("../lib/helpers");
 
 // Listar todos los ítems TRAUMA con fechas y conteo de usos
 router.get("/trauma", (_req, res) => {
@@ -28,8 +28,8 @@ router.get("/trauma", (_req, res) => {
 router.get("/trauma/exportar", (_req, res) => {
     try {
         const xlsx = require("xlsx");
-        const hoy  = new Date().toISOString().slice(0, 10);
-        const en30 = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const hoy  = fechaLocalISO();
+        const en30 = fechaLocalISO(30);
 
         const items = db.prepare(`
             SELECT
@@ -115,7 +115,7 @@ router.put("/trauma/:id/fechas", (req, res) => {
         if (fecha_recepcion && fecha_vencimiento && fecha_vencimiento < fecha_recepcion)
             return badRequest(res, "La fecha de vencimiento no puede ser anterior a la de recepción");
 
-        db.prepare(`UPDATE item SET fecha_recepcion=?, fecha_vencimiento=?, actualizado_en=datetime('now') WHERE id=?`)
+        db.prepare(`UPDATE item SET fecha_recepcion=?, fecha_vencimiento=?, actualizado_en=datetime('now','localtime') WHERE id=?`)
             .run(fecha_recepcion, fecha_vencimiento, id);
 
         res.json({ ok: true });
@@ -144,9 +144,10 @@ router.post("/trauma/:id/usos", (req, res) => {
 
         const cantidad    = Math.max(1, Number(req.body.cantidad) || 1);
         const motivo      = cleanText(req.body.motivo);
-        const responsable = cleanText(req.body.responsable);
+        // El responsable del uso puede ser otro bombero (terreno); si no se indica, el usuario logueado
+        const responsable = cleanText(req.body.responsable) || req.usuario?.nombre || req.usuario?.username || null;
         const observacion = cleanText(req.body.observacion);
-        const fecha       = cleanText(req.body.fecha) || new Date().toISOString().slice(0, 10);
+        const fecha       = cleanText(req.body.fecha) || fechaLocalISO();
 
         if (!esFechaValida(fecha))
             return badRequest(res, "fecha inválida. Use formato YYYY-MM-DD");

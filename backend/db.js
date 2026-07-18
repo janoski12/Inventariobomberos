@@ -17,6 +17,8 @@ const schema = fs.readFileSync(schemaPath, "utf8");
 db.exec(schema);
 
 db.exec("PRAGMA foreign_keys = ON;");
+// WAL: las lecturas no se bloquean durante escrituras largas (p.ej. importaciones)
+db.pragma("journal_mode = WAL");
 
 // Migraciones: columnas trauma
 try { db.exec("ALTER TABLE item ADD COLUMN fecha_recepcion TEXT"); } catch {}

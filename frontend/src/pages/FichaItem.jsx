@@ -9,6 +9,7 @@ import { listarBomberos } from "../api/bomberos";
 import { listarUbicaciones } from "../api/ubicaciones";
 import Modal from "../components/Modal";
 import { obtenerControles, crearControl, completarControl } from "../api/controles";
+import { fechaLocalISO } from "../utils/fechas";
 
 export default function FichaItem() {
   const { id } = useParams();
@@ -30,17 +31,14 @@ export default function FichaItem() {
 
   const [formAsignar, setFormAsignar] = useState({
     bombero_id: "",
-    responsable: "",
     observacion: "",
   });
   const [formMover, setFormMover] = useState({
     ubicacion_id: "",
-    responsable: "",
     observacion: "",
   });
   const [formEstado, setFormEstado] = useState({
     estado: "OPERATIVO",
-    responsable: "",
     observacion: "",
   });
 
@@ -279,7 +277,7 @@ export default function FichaItem() {
       ) : (
         <div className="stack">
           {controles.map((c) => {
-            const vencido = !c.fecha_real && c.fecha_objetivo < new Date().toISOString().slice(0, 10);
+            const vencido = !c.fecha_real && c.fecha_objetivo < fechaLocalISO();
             return (
               <div key={c.id} className={`card${vencido ? " card--vencido" : ""}`}>
                 <div className="spread">
@@ -448,18 +446,6 @@ export default function FichaItem() {
           </label>
 
           <label className="label">
-            Responsable
-            <input
-              value={formAsignar.responsable}
-              onChange={(e) =>
-                setFormAsignar((p) => ({ ...p, responsable: e.target.value }))
-              }
-              className="input"
-              placeholder="Ej: Encargado Inventario"
-            />
-          </label>
-
-          <label className="label">
             Observacion
             <input
               value={formAsignar.observacion}
@@ -483,7 +469,6 @@ export default function FichaItem() {
                   setGuardando(true);
                   await asignarItem(id, {
                     bombero_id: Number(formAsignar.bombero_id),
-                    responsable: formAsignar.responsable || "Sistema",
                     observacion: formAsignar.observacion || null,
                   });
                   await recargarFicha();
@@ -529,18 +514,6 @@ export default function FichaItem() {
           </label>
 
           <label>
-            Responsable
-            <input
-              value={formMover.responsable}
-              onChange={(e) =>
-                setFormMover((p) => ({ ...p, responsable: e.target.value }))
-              }
-              className="input"
-              placeholder="Ej: Encargado Trauma"
-            />
-          </label>
-
-          <label>
             Observacion
             <input
               value={formMover.observacion}
@@ -564,7 +537,6 @@ export default function FichaItem() {
                   setGuardando(true);
                   await moverItem(id, {
                     ubicacion_id: Number(formMover.ubicacion_id),
-                    responsable: formMover.responsable || "Sistema",
                     observacion: formMover.observacion || null,
                   });
                   await recargarFicha();
@@ -608,18 +580,6 @@ export default function FichaItem() {
           </label>
 
           <label className="label">
-            Responsable
-            <input
-              className="input"
-              value={formEstado.responsable}
-              onChange={(e) =>
-                setFormEstado((p) => ({ ...p, responsable: e.target.value }))
-              }
-              placeholder="Ej: Encargado Material Menor"
-            />
-          </label>
-
-          <label className="label">
             Observacion
             <input
               className="input"
@@ -643,7 +603,6 @@ export default function FichaItem() {
                   setGuardando(true);
                   await cambiarEstadoItem(id, {
                     estado: formEstado.estado,
-                    responsable: formEstado.responsable || "Sistema",
                     observacion: formEstado.observacion || null,
                   });
                   await recargarFicha();

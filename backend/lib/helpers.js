@@ -34,7 +34,15 @@ function conflict(res, message) {
 
 function serverError(res, e, fallback = "Error en el servidor") {
     console.error(e);
-    return res.status(500).json({ error: fallback, detail: String(e) });
+    return res.status(500).json({ error: fallback });
+}
+
+// Fecha local del servidor en YYYY-MM-DD (toISOString daria la fecha UTC,
+// que en Chile se adelanta un dia desde las 20:00-21:00)
+function fechaLocalISO(offsetDias = 0) {
+    const d = new Date(Date.now() + offsetDias * 86400000);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 function normXlsx(v) {
@@ -82,5 +90,5 @@ module.exports = {
     ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, ESTADOS_BOMBERO, TIPOS_UBICACION,
     TIPOS_CONTROL, RESULTADOS_CONTROL,
     isNil, cleanText, badRequest, notFound, conflict, serverError,
-    normXlsx, normFechaXlsx, parseXlsxBuffer, esFechaValida,
+    normXlsx, normFechaXlsx, parseXlsxBuffer, esFechaValida, fechaLocalISO,
 };
