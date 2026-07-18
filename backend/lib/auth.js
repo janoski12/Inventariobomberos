@@ -1,6 +1,10 @@
 const jwt = require("jsonwebtoken");
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-inseguro";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    console.error("ERROR: falta JWT_SECRET. Define esta variable en backend/.env (ver .env.example) antes de iniciar el servidor.");
+    process.exit(1);
+}
 const TOKEN_EXPIRA = "12h";
 
 function firmarToken(usuario) {

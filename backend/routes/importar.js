@@ -1,12 +1,13 @@
 const router = require("express").Router();
 const db = require("../db");
+const { requireAdmin } = require("../lib/auth");
 const {
     upload, ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, ESTADOS_BOMBERO, TIPOS_UBICACION, TIPOS_CONTROL,
     badRequest, serverError, normXlsx, normFechaXlsx, parseXlsxBuffer,
 } = require("../lib/helpers");
 
-// Importar desde Excel (carga completa: borra y reemplaza todo)
-router.post("/importar", upload.single("archivo"), (req, res) => {
+// Importar desde Excel (carga completa: borra y reemplaza todo) — solo admin
+router.post("/importar", requireAdmin, upload.single("archivo"), (req, res) => {
     if (!req.file) return badRequest(res, "No se recibió ningún archivo");
 
     const ext = req.file.originalname.split(".").pop().toLowerCase();
@@ -413,8 +414,8 @@ router.post("/importar/items", upload.single("archivo"), (req, res) => {
     } catch (e) { return res.status(400).json({ error: String(e.message ?? e) }); }
 });
 
-// Descargar respaldo de la base de datos (snapshot consistente)
-router.get("/backup", async (_req, res) => {
+// Descargar respaldo de la base de datos (snapshot consistente) — solo admin: contiene hashes de contraseñas
+router.get("/backup", requireAdmin, async (_req, res) => {
     const fs   = require("fs");
     const path = require("path");
     const tmpFile = path.join(__dirname, "..", "data", `backup_tmp_${Date.now()}.db`);

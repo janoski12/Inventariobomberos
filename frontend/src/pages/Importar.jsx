@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { importarExcel, importarParcial, descargarPlantilla, descargarPlantillaParcial, descargarBackup } from "../api/importar";
 import { useDialog } from "../context/DialogContext";
+import { useAuth } from "../context/AuthContext";
 
 export default function Importar() {
   const { toast } = useDialog();
+  const { esAdmin } = useAuth();
   const [archivo, setArchivo]       = useState(null);
   const [confirmado, setConfirmado] = useState(false);
   const [importando, setImportando] = useState(false);
@@ -59,75 +61,79 @@ export default function Importar() {
       <h2>Importar datos</h2>
       <p className="muted">Carga o actualiza datos del sistema mediante archivos Excel.</p>
 
-      {/* ── RESPALDO ── */}
-      <p className="importar-seccion-label">Respaldo</p>
-      <div className="row" style={{ alignItems: "center" }}>
-        <button className="btn-light" disabled={respaldando} onClick={handleBackup}>
-          {respaldando ? "Generando..." : "Descargar respaldo de la BD"}
-        </button>
-        <span className="muted">
-          Descarga una copia completa de la base de datos. Recomendado antes de una carga completa.
-        </span>
-      </div>
-
-      <hr className="importar-seccion-div" />
-
-      {/* ── CARGA COMPLETA ── */}
-      <p className="importar-seccion-label">Carga completa</p>
-
-      <div className="importar-aviso">
-        <strong>Atención:</strong> Esta operación borrará y reemplazará <strong>todos</strong> los
-        datos existentes (ítems, bomberos, ubicaciones y controles). Esta acción no se puede deshacer.
-      </div>
-
-      <div className="stack importar-zona">
-        <div>
-          <label className="importar-label" htmlFor="input-excel">
-            {archivo ? archivo.name : "Seleccionar archivo .xlsx"}
-          </label>
-          <input
-            key={inputKey}
-            id="input-excel"
-            type="file"
-            accept=".xlsx,.xls"
-            className="importar-input"
-            onChange={(e) => { setArchivo(e.target.files[0] ?? null); setResultado(null); setError(""); }}
-          />
-        </div>
-
-        {archivo && <p className="muted">{(archivo.size / 1024).toFixed(1)} KB</p>}
-
-        <label className="importar-check">
-          <input type="checkbox" checked={confirmado} onChange={(e) => setConfirmado(e.target.checked)} />
-          Entiendo que se borrarán todos los datos actuales
-        </label>
-
-        <div className="row">
-          <button className="btn" disabled={!archivo || !confirmado || importando} onClick={handleImportar}>
-            {importando ? "Importando..." : "Importar datos"}
-          </button>
-          <button className="btn-light" disabled={descargando} onClick={handleDescargarCompleta}>
-            {descargando ? "Descargando..." : "Descargar plantilla completa"}
-          </button>
-        </div>
-
-        {error && <ErrorImport mensaje={error} />}
-
-        {resultado && (
-          <div className="importar-resumen">
-            <p className="importar-resumen-titulo">Importación completada correctamente</p>
-            <div className="reporte-grid">
-              <div className="card"><div className="stat-number text-total">{resultado.bomberos}</div><div className="stat-label">Bomberos</div></div>
-              <div className="card"><div className="stat-number text-total">{resultado.ubicaciones}</div><div className="stat-label">Ubicaciones</div></div>
-              <div className="card"><div className="stat-number text-total">{resultado.items}</div><div className="stat-label">Ítems</div></div>
-              <div className="card"><div className="stat-number text-total">{resultado.controles}</div><div className="stat-label">Controles</div></div>
-            </div>
+      {/* ── RESPALDO Y CARGA COMPLETA: solo admin ── */}
+      {esAdmin && (
+        <>
+          <p className="importar-seccion-label">Respaldo</p>
+          <div className="row" style={{ alignItems: "center" }}>
+            <button className="btn-light" disabled={respaldando} onClick={handleBackup}>
+              {respaldando ? "Generando..." : "Descargar respaldo de la BD"}
+            </button>
+            <span className="muted">
+              Descarga una copia completa de la base de datos. Recomendado antes de una carga completa.
+            </span>
           </div>
-        )}
-      </div>
+
+          <hr className="importar-seccion-div" />
+
+          <p className="importar-seccion-label">Carga completa</p>
+
+          <div className="importar-aviso">
+            <strong>Atención:</strong> Esta operación borrará y reemplazará <strong>todos</strong> los
+            datos existentes (ítems, bomberos, ubicaciones y controles). Esta acción no se puede deshacer.
+          </div>
+
+          <div className="stack importar-zona">
+            <div>
+              <label className="importar-label" htmlFor="input-excel">
+                {archivo ? archivo.name : "Seleccionar archivo .xlsx"}
+              </label>
+              <input
+                key={inputKey}
+                id="input-excel"
+                type="file"
+                accept=".xlsx,.xls"
+                className="importar-input"
+                onChange={(e) => { setArchivo(e.target.files[0] ?? null); setResultado(null); setError(""); }}
+              />
+            </div>
+
+            {archivo && <p className="muted">{(archivo.size / 1024).toFixed(1)} KB</p>}
+
+            <label className="importar-check">
+              <input type="checkbox" checked={confirmado} onChange={(e) => setConfirmado(e.target.checked)} />
+              Entiendo que se borrarán todos los datos actuales
+            </label>
+
+            <div className="row">
+              <button className="btn" disabled={!archivo || !confirmado || importando} onClick={handleImportar}>
+                {importando ? "Importando..." : "Importar datos"}
+              </button>
+              <button className="btn-light" disabled={descargando} onClick={handleDescargarCompleta}>
+                {descargando ? "Descargando..." : "Descargar plantilla completa"}
+              </button>
+            </div>
+
+            {error && <ErrorImport mensaje={error} />}
+
+            {resultado && (
+              <div className="importar-resumen">
+                <p className="importar-resumen-titulo">Importación completada correctamente</p>
+                <div className="reporte-grid">
+                  <div className="card"><div className="stat-number text-total">{resultado.bomberos}</div><div className="stat-label">Bomberos</div></div>
+                  <div className="card"><div className="stat-number text-total">{resultado.ubicaciones}</div><div className="stat-label">Ubicaciones</div></div>
+                  <div className="card"><div className="stat-number text-total">{resultado.items}</div><div className="stat-label">Ítems</div></div>
+                  <div className="card"><div className="stat-number text-total">{resultado.controles}</div><div className="stat-label">Controles</div></div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <hr className="importar-seccion-div" />
+        </>
+      )}
 
       {/* ── IMPORTACIÓN PARCIAL ── */}
-      <hr className="importar-seccion-div" />
       <p className="importar-seccion-label">Importación parcial</p>
       <p className="muted">
         Agrega o actualiza solo una sección. No borra datos existentes — los registros con el mismo

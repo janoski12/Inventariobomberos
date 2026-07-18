@@ -102,8 +102,10 @@ router.get("/ubicaciones/:id/qr", async (req, res) => {
         if (!ubicacion) return notFound(res, "Ubicacion no encontrada");
 
         const qrcode = require("qrcode");
-        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-        const url = `${frontendUrl}/ubicaciones/${id}`;
+        // App y API comparten origen: la URL con la que se accede al sistema es la de la ficha.
+        // FRONTEND_URL solo hace falta como override (p.ej. si hay un proxy delante).
+        const origen = process.env.FRONTEND_URL || `${req.protocol}://${req.get("host")}`;
+        const url = `${origen}/ubicaciones/${id}`;
 
         const png = await qrcode.toBuffer(url, {
             type: "png",

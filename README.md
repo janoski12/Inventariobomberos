@@ -49,13 +49,15 @@ npm install
 
 ### Variables de entorno (`backend/.env`)
 
-| Variable       | Descripción                                                        |
-|----------------|--------------------------------------------------------------------|
-| `PORT`         | Puerto del backend (por defecto `3001`).                           |
-| `FRONTEND_URL` | URL del frontend; se incrusta en los QR de ubicaciones.            |
-| `JWT_SECRET`   | Clave para firmar los tokens de sesión. **Cámbiala en producción.**|
+| Variable       | Descripción                                                                          |
+|----------------|--------------------------------------------------------------------------------------|
+| `PORT`         | Puerto del servidor (por defecto `3001`). Sirve la app y la API en el mismo puerto.  |
+| `JWT_SECRET`   | Clave para firmar los tokens de sesión. **Obligatoria**: el servidor no arranca sin ella. |
+| `FRONTEND_URL` | *(Opcional)* Fuerza el origen de los QR de ubicaciones. Normalmente no hace falta: se usa la URL con la que se accede al sistema. |
 
 ## Ejecución
+
+### Desarrollo
 
 En dos terminales separadas:
 
@@ -68,6 +70,24 @@ npm run dev
 cd frontend
 npm run dev
 ```
+
+El frontend de desarrollo redirige las llamadas `/api` al backend automáticamente
+(proxy de Vite), igual que en producción.
+
+### Producción (un solo puerto)
+
+Se compila el frontend una vez y Express lo sirve junto con la API:
+
+```bash
+cd frontend
+npm run build     # genera frontend/dist
+
+cd ../backend
+npm start
+```
+
+La aplicación completa queda disponible en `http://<ip-del-servidor>:3001` para
+cualquier equipo o teléfono de la red local.
 
 ### Primer acceso
 
@@ -84,8 +104,10 @@ clave:    admin123
 
 ### Roles
 
-- **Admin** — todo lo del operador, además de eliminar registros y gestionar usuarios.
-- **Operador** — ver y editar el inventario (no elimina ni gestiona usuarios).
+- **Admin** — todo lo del operador, además de eliminar registros, gestionar usuarios,
+  hacer la carga completa desde Excel y descargar el respaldo de la base de datos.
+- **Operador** — ver y editar el inventario (no elimina, no gestiona usuarios y no
+  accede a la carga completa ni al respaldo).
 
 ## Tests
 
@@ -100,16 +122,16 @@ npm test
 
 ## Uso de códigos QR en la red local
 
-Para que los QR de las ubicaciones se puedan escanear desde teléfonos:
+Los QR de las ubicaciones codifican la **misma URL con la que se accede al sistema**.
+Basta con:
 
-1. Asigna una **IP fija** al equipo servidor (o reserva DHCP en el router).
-2. En `backend/.env`, pon esa IP en `FRONTEND_URL`, p.ej.
-   `FRONTEND_URL=http://192.168.1.10:5173`.
-3. Levanta el frontend exponiéndolo en la red: `npm run dev -- --host`.
+1. Asignar una **IP fija** al equipo servidor (o reserva DHCP en el router).
+2. Usar el sistema desde esa IP (p.ej. `http://192.168.1.10:3001`) al descargar
+   las etiquetas QR: cualquier teléfono de la red podrá escanearlas y abrir la ficha.
 
 ## Respaldo y restauración
 
-- **Respaldo**: pestaña *Importar → Descargar respaldo de la BD* (genera un `.db`).
+- **Respaldo** *(solo admin)*: pestaña *Importar → Descargar respaldo de la BD* (genera un `.db`).
 - **Restaurar**: con el backend detenido, reemplaza `backend/data/inventario.db`
   por el archivo de respaldo.
 
@@ -117,7 +139,7 @@ Para que los QR de las ubicaciones se puedan escanear desde teléfonos:
 
 ```
 backend/
-├── server.js          Punto de entrada: monta routers y middleware de auth
+├── server.js          Punto de entrada: API bajo /api, auth y frontend compilado
 ├── db.js              Conexión SQLite, migraciones y seed del admin inicial
 ├── schema.sql         Definición de tablas
 ├── lib/
