@@ -213,7 +213,7 @@ router.get("/items/:id/movimientos", (req, res) => {
 
     res.json(rows);
     } catch (e) {
-        res.status(500).json({ error: "Error obteniendo los movimientos", detail: String(e) });
+        return serverError(res, e, "Error obteniendo los movimientos");
     }
 });
 
@@ -321,47 +321,20 @@ router.get("/items/:id", (req, res) => {
     `).get(id);
 
     if (!row) return res.status(404).json({ error: "Item no encontrado" });
+
+    // Asignación a bombero pendiente de firma, si la hay (bloquea nuevas solicitudes sobre este item)
+    row.asignacion_pendiente = db.prepare(`
+        SELECT ap.id, ap.observacion, ap.solicitado_por, ap.fecha_solicitud, b.nombre AS bombero_nombre
+        FROM asignacion_pendiente ap
+        JOIN bombero b ON b.id = ap.bombero_id
+        WHERE ap.item_id = ? AND ap.estado = 'PENDIENTE'
+    `).get(id) ?? null;
+
     res.json(row);
 });
 
-router.post("/items/:id/asignar", (req, res) => {
-    try {
-        const id = Number(req.params.id);
-        const bombero_id = Number(req.body.bombero_id);
-        const responsable = quienRegistra(req);
-        const observacion = cleanText(req.body.observacion);
-
-        if (!Number.isInteger(id) || id <= 0){
-            return badRequest(res, "ID de item inválido");
-        }
-        if (!Number.isInteger(bombero_id) || bombero_id <= 0){
-            return badRequest(res, "ID de bombero inválido");
-        }
-
-        const item = db.prepare("SELECT * FROM item WHERE id=?").get(id);
-        if (!item) return notFound(res, "Item no encontrado");
-
-        const bombero = db.prepare("SELECT * FROM bombero WHERE id=?").get(bombero_id);
-        if (!bombero) return notFound(res, "Bombero no encontrado");
-
-        const desdeAsignar = item.asignado_bombero_id
-            ? `Asignado a ${db.prepare("SELECT nombre FROM bombero WHERE id=?").get(item.asignado_bombero_id)?.nombre ?? "Bombero desconocido"}`
-            : item.ubicacion_actual_id
-                ? `Ubicado en ${db.prepare("SELECT nombre FROM ubicacion WHERE id=?").get(item.ubicacion_actual_id)?.nombre ?? "Ubicación desconocida"}`
-                : "Sin asignación";
-
-        const trx = db.transaction(() => {
-            db.prepare(`UPDATE item SET asignado_bombero_id=?, ubicacion_actual_id=NULL, actualizado_en=datetime('now','localtime') WHERE id=?`).run(bombero_id, id);
-            db.prepare(`INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha) VALUES (?, 'ASIGNACION', ?, ?, ?, ?, datetime('now','localtime'))`)
-                .run(id, desdeAsignar, `Asignado a ${bombero.nombre}`, responsable, observacion ?? null);
-        });
-
-        trx();
-        res.json({ ok: true });
-    } catch (e) {
-        return serverError(res, e, "Error asignando item");
-    }
-});
+// La asignación a bombero pasa por lib/asignaciones (acta de entrega + firma):
+// ver POST /items/:id/asignaciones y POST /asignaciones/:id/confirmar en routes/asignaciones.js
 
 router.post("/items/:id/mover", (req, res) => {
     try {
@@ -438,7 +411,7 @@ router.post("/items/:id/estado", (req, res) => {
     }
 });
 
-// Eliminar item (cascada: usos trauma, controles y movimientos)
+// Eliminar item (cascada: usos trauma, controles, actas de entrega y movimientos)
 router.delete("/items/:id", (req, res) => {
     try {
         const id = Number(req.params.id);
@@ -450,6 +423,7 @@ router.delete("/items/:id", (req, res) => {
         db.transaction(() => {
             db.prepare("DELETE FROM uso_trauma WHERE item_id=?").run(id);
             db.prepare("DELETE FROM control   WHERE item_id=?").run(id);
+            db.prepare("DELETE FROM asignacion_pendiente WHERE item_id=?").run(id);
             db.prepare("DELETE FROM movimiento WHERE item_id=?").run(id);
             db.prepare("DELETE FROM item       WHERE id=?").run(id);
         })();

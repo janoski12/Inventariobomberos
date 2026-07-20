@@ -44,6 +44,9 @@ try {
 // codigo_qr gestionado por el sistema: formato UBIC-XXXX para todas
 try { db.exec("UPDATE ubicacion SET codigo_qr = 'UBIC-' || printf('%04d', id) WHERE codigo_qr IS NULL OR codigo_qr = '' OR codigo_qr NOT LIKE 'UBIC-%'"); } catch {}
 
+// Migracion: vincula el movimiento de asignacion con el acta de entrega que lo respalda
+try { db.exec("ALTER TABLE movimiento ADD COLUMN asignacion_id INTEGER"); } catch {}
+
 // Seed: si no existe ningun usuario, crear admin inicial (admin / admin123)
 try {
     const { total } = db.prepare("SELECT COUNT(*) AS total FROM usuario").get();

@@ -12,6 +12,9 @@ fechas de vencimiento y registro de uso.
   (con cálculo de tiempo en servicio).
 - **Asignación y trazabilidad** — cada ítem se asigna a un bombero o ubicación;
   todo movimiento queda registrado en su historial a nombre del usuario que lo hizo.
+- **Acta de entrega firmada** — al asignar un ítem a un bombero, el sistema genera
+  un acta en PDF; la asignación queda pendiente hasta subir el documento firmado
+  (foto o escaneo), que se guarda ligado al movimiento.
 - **Bomberos** — gestión con RUT y N° de registro únicos, cargo y ficha con sus
   ítems asignados.
 - **Ubicaciones** — gestión con código QR generado automáticamente (`UBIC-XXXX`),
@@ -130,6 +133,22 @@ Basta con:
 2. Usar el sistema desde esa IP (p.ej. `http://192.168.1.10:3001`) al descargar
    las etiquetas QR: cualquier teléfono de la red podrá escanearlas y abrir la ficha.
 
+## Acta de entrega y firma
+
+Al asignar un ítem a un bombero (botón *Asignar a bombero* en la ficha del ítem):
+
+1. El sistema genera un **acta de entrega** en PDF (datos del bombero, del ítem y
+   espacio para firma) y la abre en una pestaña nueva para imprimirla. El ítem
+   **todavía no cambia de dueño** — queda marcado como *pendiente de firma*.
+2. Se imprime el acta y la firma la persona que recibe el equipo.
+3. En la ficha del ítem, *Subir documento firmado* — una foto o escaneo (PDF, JPG
+   o PNG) del acta ya firmada. Recién en ese momento el ítem queda asignado, y el
+   documento firmado queda disponible desde el historial de movimientos.
+
+Mientras una solicitud está pendiente, ese ítem no admite una segunda solicitud de
+asignación (se puede cancelar la pendiente desde el mismo banner). El listado
+completo de actas pendientes de firma está en **Reportes**.
+
 ## Respaldo y restauración
 
 - **Automático**: al arrancar y cada 24 h el servidor guarda una copia en
@@ -165,5 +184,5 @@ frontend/
 ## Stack
 
 - **Backend**: Node.js, Express 5, better-sqlite3, JWT (jsonwebtoken), bcryptjs,
-  multer + xlsx (Excel), qrcode.
+  multer + xlsx (Excel), qrcode, pdfkit (actas de entrega).
 - **Frontend**: React 19, Vite 7, React Router 7.

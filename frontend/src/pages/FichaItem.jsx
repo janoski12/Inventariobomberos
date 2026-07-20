@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { obtenerItem, obtenerMovimientos, asignarItem, cambiarEstadoItem, moverItem, actualizarItem, eliminarItem, obtenerSubcategorias, obtenerMarcas, obtenerModelos } from "../api/items";
+import { obtenerItem, obtenerMovimientos, cambiarEstadoItem, moverItem, actualizarItem, eliminarItem, obtenerSubcategorias, obtenerMarcas, obtenerModelos } from "../api/items";
+import { solicitarAsignacion, confirmarAsignacion, cancelarAsignacion, abrirDocumento, abrirDocumentoFirmado } from "../api/asignaciones";
 import CreatableSelect from "../components/CreatableSelect";
 import { useDialog } from "../context/DialogContext";
 import { useAuth } from "../context/AuthContext";
@@ -28,6 +29,9 @@ export default function FichaItem() {
   const [openAsignar, setOpenAsignar] = useState(false);
   const [openMover, setOpenMover] = useState(false);
   const [openEstado, setOpenEstado] = useState(false);
+  const [openConfirmarFirma, setOpenConfirmarFirma] = useState(false);
+  const [archivoFirmado, setArchivoFirmado] = useState(null);
+  const [procesandoFirma, setProcesandoFirma] = useState(false);
 
   const [formAsignar, setFormAsignar] = useState({
     bombero_id: "",
@@ -151,16 +155,71 @@ export default function FichaItem() {
         {item.codigo} - {item.descripcion}
       </h2>
 
+      {/* BANNER: asignación pendiente de firma */}
+      {item.asignacion_pendiente && (
+        <div className="card card--pendiente-firma" style={{ marginTop: 10 }}>
+          <div className="spread">
+            <div>
+              <div className="card-title">⏳ Pendiente de firma</div>
+              <div className="card-detail">
+                Asignación solicitada a <b>{item.asignacion_pendiente.bombero_nombre}</b>
+                <br />
+                Solicitada el {item.asignacion_pendiente.fecha_solicitud} por {item.asignacion_pendiente.solicitado_por}
+                {item.asignacion_pendiente.observacion ? <><br />Obs: {item.asignacion_pendiente.observacion}</> : null}
+              </div>
+            </div>
+            <div className="row">
+              <button
+                className="btn-light"
+                onClick={async () => {
+                  try { await abrirDocumento(item.asignacion_pendiente.id); }
+                  catch { toast("No se pudo abrir el documento."); }
+                }}
+              >
+                Ver / imprimir acta
+              </button>
+              <button
+                className="btn"
+                onClick={() => { setArchivoFirmado(null); setOpenConfirmarFirma(true); }}
+              >
+                Subir documento firmado
+              </button>
+              <button
+                className="btn-danger"
+                disabled={procesandoFirma}
+                onClick={async () => {
+                  if (!await confirm("¿Cancelar esta solicitud de asignación? El ítem seguirá donde está.")) return;
+                  try {
+                    setProcesandoFirma(true);
+                    await cancelarAsignacion(item.asignacion_pendiente.id);
+                    await recargarFicha();
+                    toast("Solicitud cancelada", "success");
+                  } catch (e) {
+                    toast(e.message);
+                  } finally {
+                    setProcesandoFirma(false);
+                  }
+                }}
+              >
+                Cancelar solicitud
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* BARRA DE ACCIONES */}
       <div className="row">
-        <button
-          className="btn"
-          onClick={() => {
-            setOpenAsignar(true);
-          }}
-        >
-          Asignar a bombero
-        </button>
+        {!item.asignacion_pendiente && (
+          <button
+            className="btn"
+            onClick={() => {
+              setOpenAsignar(true);
+            }}
+          >
+            Asignar a bombero
+          </button>
+        )}
         <button
           className="btn"
           onClick={() => {
@@ -256,6 +315,19 @@ export default function FichaItem() {
                 <div><b>Responsable:</b> {m.responsable ?? "-"}</div>
                 {m.observacion ? <div><b>Obs:</b> {m.observacion}</div> : null}
               </div>
+              {m.tipo === "ASIGNACION" && m.asignacion_id && (
+                <div style={{ marginTop: 8 }}>
+                  <button
+                    className="btn-light"
+                    onClick={async () => {
+                      try { await abrirDocumentoFirmado(m.asignacion_id); }
+                      catch { toast("No se pudo abrir el documento firmado."); }
+                    }}
+                  >
+                    Ver acta firmada
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -420,13 +492,18 @@ export default function FichaItem() {
         </div>
       </Modal>
 
-      {/* MODAL ASIGNAR */}
+      {/* MODAL ASIGNAR (solicita el acta de entrega; el item se asigna recién al confirmar con la firma) */}
       <Modal
         open={openAsignar}
         title="Asignar a bombero"
         onClose={() => setOpenAsignar(false)}
       >
         <div className="stack">
+          <p className="muted">
+            Se generará un acta de entrega en PDF. Debe imprimirse, ser firmada por
+            quien recibe el equipo, y luego subirse (foto o escaneo) para confirmar la asignación.
+          </p>
+
           <label className="label">
             Bombero
             <select
@@ -467,22 +544,71 @@ export default function FichaItem() {
               onClick={async () => {
                 try {
                   setGuardando(true);
-                  await asignarItem(id, {
+                  const { id: pendienteId } = await solicitarAsignacion(id, {
                     bombero_id: Number(formAsignar.bombero_id),
                     observacion: formAsignar.observacion || null,
                   });
                   await recargarFicha();
-                  toast("Asignado", "success");
                   setOpenAsignar(false);
+                  setFormAsignar({ bombero_id: "", observacion: "" });
+                  toast("Acta generada. Imprímela, fírmala y súbela para confirmar.", "success");
+                  await abrirDocumento(pendienteId);
                 } catch (e) {
                   console.error(e);
-                  toast("No se pudo asignar. Revisar Backend");
+                  toast(e.message || "No se pudo generar la solicitud.");
                 } finally {
                   setGuardando(false);
                 }
               }}
             >
-              Guardar
+              Generar acta de entrega
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* MODAL CONFIRMAR FIRMA: sube el acta firmada; recién aquí se concreta la asignación */}
+      <Modal
+        open={openConfirmarFirma}
+        title="Subir documento firmado"
+        onClose={() => setOpenConfirmarFirma(false)}
+      >
+        <div className="stack">
+          <p className="muted">
+            Sube una foto o escaneo del acta ya firmada (PDF, JPG o PNG). El ítem
+            quedará asignado al bombero recién al confirmar.
+          </p>
+
+          <input
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png"
+            className="importar-input"
+            onChange={(e) => setArchivoFirmado(e.target.files[0] ?? null)}
+          />
+
+          <div className="row" style={{ justifyContent: "flex-end" }}>
+            <button onClick={() => setOpenConfirmarFirma(false)} className="btn-light">
+              Cancelar
+            </button>
+            <button
+              disabled={!archivoFirmado || procesandoFirma}
+              className="btn"
+              onClick={async () => {
+                try {
+                  setProcesandoFirma(true);
+                  await confirmarAsignacion(item.asignacion_pendiente.id, archivoFirmado);
+                  await recargarFicha();
+                  toast("Asignación confirmada", "success");
+                  setOpenConfirmarFirma(false);
+                  setArchivoFirmado(null);
+                } catch (e) {
+                  toast(e.message || "No se pudo confirmar la asignación.");
+                } finally {
+                  setProcesandoFirma(false);
+                }
+              }}
+            >
+              {procesandoFirma ? "Confirmando..." : "Confirmar asignación"}
             </button>
           </div>
         </div>

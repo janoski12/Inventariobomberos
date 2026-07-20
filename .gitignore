@@ -7,6 +7,7 @@ backend/data/*.db-journal
 backend/data/*.db-wal
 backend/data/*.db-shm
 backend/data/backups/
+backend/data/documentos/
 
 # Env
 .env

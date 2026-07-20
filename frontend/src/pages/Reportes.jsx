@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { obtenerReportes, descargarPlantilla } from "../api/reportes";
+import { listarAsignacionesPendientes, abrirDocumento } from "../api/asignaciones";
 import { useDialog } from "../context/DialogContext";
 
 const CLASE_ESTADO = {
@@ -22,12 +23,14 @@ export default function Reportes() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [descargando, setDescargando] = useState(false);
+  const [pendientesFirma, setPendientesFirma] = useState([]);
 
   useEffect(() => {
     obtenerReportes()
       .then((d) => setData(d))
       .catch(() => setError("No se pudieron cargar los reportes."))
       .finally(() => setCargando(false));
+    listarAsignacionesPendientes().catch(() => []).then(setPendientesFirma);
   }, []);
 
   if (cargando) return <div className="container"><p>Cargando...</p></div>;
@@ -155,6 +158,44 @@ export default function Reportes() {
                 <div className="item-tipo">{c.tipo}</div>
               </div>
             </Link>
+          ))}
+        </div>
+      )}
+
+      {/* ASIGNACIONES PENDIENTES DE FIRMA */}
+      <div className="spread" style={{ marginBottom: 10 }}>
+        <h3>Asignaciones pendientes de firma</h3>
+        {pendientesFirma.length > 0 && (
+          <span className="badge-warning">{pendientesFirma.length} pendiente{pendientesFirma.length !== 1 ? "s" : ""}</span>
+        )}
+      </div>
+      {pendientesFirma.length === 0 ? (
+        <p className="muted" style={{ marginBottom: 20 }}>No hay actas de entrega esperando firma.</p>
+      ) : (
+        <div className="stack" style={{ marginBottom: 20 }}>
+          {pendientesFirma.map((p) => (
+            <div key={p.id} className="card card--pendiente-firma">
+              <div className="spread">
+                <div>
+                  <Link to={`/items/${p.item_id}`} style={{ textDecoration: "none" }}>
+                    <span className="item-code">{p.item_codigo}</span>
+                    <span className="item-desc">{p.item_descripcion}</span>
+                  </Link>
+                  <div className="item-tipo">
+                    Para {p.bombero_nombre} · solicitada el {p.fecha_solicitud} por {p.solicitado_por}
+                  </div>
+                </div>
+                <button
+                  className="btn-light"
+                  onClick={async () => {
+                    try { await abrirDocumento(p.id); }
+                    catch { toast("No se pudo abrir el documento."); }
+                  }}
+                >
+                  Ver acta
+                </button>
+              </div>
+            </div>
           ))}
         </div>
       )}

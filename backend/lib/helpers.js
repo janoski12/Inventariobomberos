@@ -9,6 +9,8 @@ const ESTADOS_BOMBERO    = ["ACTIVO", "INACTIVO"];
 const TIPOS_UBICACION    = ["BODEGA", "SALA", "SALON", "CONTAINER", "CARRO", "CASILLERO", "OTRO"];
 const TIPOS_CONTROL      = ["INSPECCION", "MANTENCION", "CERTIFICACION", "OTRO"];
 const RESULTADOS_CONTROL = ["APROBADO", "RECHAZADO", "PENDIENTE"];
+const ESTADOS_ASIGNACION = ["PENDIENTE", "CONFIRMADA", "CANCELADA"];
+const EXT_DOCUMENTO      = { pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png" };
 
 function isNil(v) {
     return v === null || v === undefined;
@@ -85,10 +87,18 @@ function parseXlsxBuffer(req, res) {
     return req.file.buffer;
 }
 
+// Valida el archivo subido como acta de entrega firmada (foto o escaneo)
+function parseDocumentoBuffer(req, res) {
+    if (!req.file) { badRequest(res, "Debes subir el documento firmado"); return null; }
+    const ext = req.file.originalname.split(".").pop().toLowerCase();
+    if (!EXT_DOCUMENTO[ext]) { badRequest(res, "El documento debe ser PDF, JPG o PNG"); return null; }
+    return { buffer: req.file.buffer, ext, mime: EXT_DOCUMENTO[ext] };
+}
+
 module.exports = {
     upload,
     ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, ESTADOS_BOMBERO, TIPOS_UBICACION,
-    TIPOS_CONTROL, RESULTADOS_CONTROL,
+    TIPOS_CONTROL, RESULTADOS_CONTROL, ESTADOS_ASIGNACION,
     isNil, cleanText, badRequest, notFound, conflict, serverError,
-    normXlsx, normFechaXlsx, parseXlsxBuffer, esFechaValida, fechaLocalISO,
+    normXlsx, normFechaXlsx, parseXlsxBuffer, esFechaValida, fechaLocalISO, parseDocumentoBuffer,
 };

@@ -454,6 +454,7 @@ h1, h2, h3 { margin: 0; }
 
 .card--vencido { border-left: 3px solid var(--c-fuera-servicio); }
 .card--proximo { border-left: 3px solid var(--c-mantencion); }
+.card--pendiente-firma { border-left: 3px solid var(--c-mantencion); background: color-mix(in srgb, var(--c-mantencion) 8%, var(--surface)); }
 
 .badge-danger  { color: var(--c-fuera-servicio); font-weight: 600; font-size: 14px; }
 .badge-warning { color: var(--c-mantencion);     font-weight: 600; font-size: 14px; }

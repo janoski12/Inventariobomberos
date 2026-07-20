@@ -43,10 +43,6 @@ export function actualizarItem(id, payload) {
   return request(`${API_URL}/items/${id}`, { method: "PUT", ...json(payload) });
 }
 
-export function asignarItem(id, payload) {
-  return request(`${API_URL}/items/${id}/asignar`, { method: "POST", ...json(payload) });
-}
-
 export function moverItem(id, payload) {
   return request(`${API_URL}/items/${id}/mover`, { method: "POST", ...json(payload) });
 }

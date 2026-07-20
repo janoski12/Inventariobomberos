@@ -109,7 +109,12 @@ router.delete("/bomberos/:id", (req, res) => {
             });
         }
 
-        db.prepare("DELETE FROM bombero WHERE id=?").run(id);
+        db.transaction(() => {
+            // Actas de entrega (historicas o pendientes) que referencian a este bombero
+            db.prepare("DELETE FROM asignacion_pendiente WHERE bombero_id=?").run(id);
+            db.prepare("DELETE FROM bombero WHERE id=?").run(id);
+        })();
+
         res.json({ ok: true });
     } catch (e) {
         return serverError(res, e, "Error eliminando bombero");
