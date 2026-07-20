@@ -148,6 +148,16 @@ describe("CRUD y validaciones de ítems", () => {
         assert.equal(res.status, 400);
     });
 
+    test("no se puede crear un ítem ya asignado a un bombero (debe pasar por el acta) → 400", async () => {
+        const bom = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero Directo" });
+        const res = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ codigo: "TEST-004", categoria: "EPP", descripcion: "x", asignado_bombero_id: bom.body.id });
+        assert.equal(res.status, 400);
+
+        const buscar = await request(app).get("/api/items?q=TEST-004").set(auth(adminToken));
+        assert.equal(buscar.body.length, 0, "el item no debe haberse creado");
+    });
+
     test("filtro de estado inválido en búsqueda → 400", async () => {
         const res = await request(app).get("/api/items?estado=NOEXISTE").set(auth(adminToken));
         assert.equal(res.status, 400);
@@ -407,8 +417,14 @@ describe("Importación parcial de ítems", () => {
 
         const bom = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero Importa" });
         const item = await request(app).post("/api/items").set(auth(adminToken))
-            .send({ codigo: "IMP-001", categoria: "EPP", descripcion: "Casco importado", asignado_bombero_id: bom.body.id });
+            .send({ codigo: "IMP-001", categoria: "EPP", descripcion: "Casco importado" });
         assert.equal(item.status, 201);
+
+        // La asignación, incluso para el setup del test, pasa por el acta de entrega
+        const acta = await request(app).post("/api/actas-entrega").set(auth(adminToken))
+            .send({ bombero_id: bom.body.id, item_ids: [item.body.id] });
+        await request(app).post(`/api/actas-entrega/${acta.body.id}/confirmar`).set(auth(adminToken))
+            .attach("archivo", Buffer.from("firma"), "firma.jpg");
 
         // Excel con el mismo código pero ubicación/bombero vacíos (caso típico de re-importación)
         const filas = [{

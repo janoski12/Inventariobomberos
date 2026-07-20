@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { crearItem, obtenerSubcategorias, obtenerMarcas, obtenerModelos } from "../api/items";
+import { solicitarActaEntrega, abrirDocumento } from "../api/actas";
 import { useDialog } from "../context/DialogContext";
 import { listarBomberos } from "../api/bomberos";
 import { listarUbicaciones } from "../api/ubicaciones";
@@ -240,6 +241,10 @@ export default function NuevoItem() {
                   </option>
                 ))}
               </select>
+              <p className="muted" style={{ marginTop: 6 }}>
+                El ítem se creará y, de inmediato, se generará su acta de entrega en
+                PDF. Quedará asignado al bombero recién al subir el documento firmado.
+              </p>
             </label>
           ) : (
             <label className="label">
@@ -290,16 +295,30 @@ export default function NuevoItem() {
                   fecha_fabricacion: form.fecha_fabricacion || null,
                   estado: form.estado,
                   criticidad: form.criticidad,
-                  asignado_bombero_id:
-                    form.modo === "ASIGNAR" ? Number(form.bombero_id) : null,
                   ubicacion_actual_id:
                     form.modo === "UBICAR" ? Number(form.ubicacion_id) : null,
                 };
 
                 const r = await crearItem(payload);
 
-                toast("Ítem creado", "success");
-                // si backend retorna {id: ...}, navegamos a la ficha
+                // Un item nunca se crea ya asignado: si se eligió bombero, se
+                // genera de inmediato el acta de entrega para ese item nuevo.
+                if (form.modo === "ASIGNAR" && form.bombero_id) {
+                  try {
+                    const { id: actaId } = await solicitarActaEntrega({
+                      bombero_id: Number(form.bombero_id),
+                      item_ids: [r.id],
+                    });
+                    toast("Ítem creado. Imprime el acta, fírmala y súbela para confirmar la entrega.", "success");
+                    await abrirDocumento(actaId);
+                  } catch (e2) {
+                    console.error(e2);
+                    toast("El ítem se creó, pero no se pudo generar el acta. Puedes generarla desde su ficha.");
+                  }
+                } else {
+                  toast("Ítem creado", "success");
+                }
+
                 if (r?.id) navigate(`/items/${r.id}`);
                 else navigate("/");
               } catch (e) {

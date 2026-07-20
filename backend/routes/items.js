@@ -20,7 +20,6 @@ router.post("/items", (req, res) => {
         const fecha_fabricacion = cleanText(req.body.fecha_fabricacion);
 
         const ubicacion_actual_id = isNil(req.body.ubicacion_actual_id) ? null : Number(req.body.ubicacion_actual_id);
-        const asignado_bombero_id = isNil(req.body.asignado_bombero_id) ? null : Number(req.body.asignado_bombero_id);
 
         if (!codigo) return badRequest(res, "codigo es requerido");
         if (!categoria) return badRequest(res, "categoria es requerida");
@@ -42,37 +41,27 @@ router.post("/items", (req, res) => {
         if (!isNil(req.body.ubicacion_actual_id) && (!Number.isInteger(ubicacion_actual_id) || ubicacion_actual_id <= 0)) {
             return badRequest(res, "ubicacion_actual_id inválido");
         }
-        if (!isNil(req.body.asignado_bombero_id) && (!Number.isInteger(asignado_bombero_id) || asignado_bombero_id <= 0)) {
-            return badRequest(res, "asignado_bombero_id inválido");
-        }
-        if (ubicacion_actual_id && asignado_bombero_id) {
-            return badRequest(res, "Un item no puede estar asignado a un bombero y una ubicación al mismo tiempo");
+        // La asignación a bombero, incluso al crear el item, exige acta de entrega
+        // firmada: ver POST /actas-entrega. Este endpoint solo permite ubicar.
+        if (!isNil(req.body.asignado_bombero_id)) {
+            return badRequest(res, "Un item no puede crearse ya asignado a un bombero. Créalo y luego usa 'Asignar a bombero' (genera el acta de entrega).");
         }
 
         let ubicacion = null;
-        let bombero = null;
 
         if (ubicacion_actual_id) {
             ubicacion = db.prepare("SELECT * FROM ubicacion WHERE id=?").get(ubicacion_actual_id);
             if (!ubicacion) return notFound(res, "Ubicacion no encontrada");
         }
-        if (asignado_bombero_id) {
-            bombero = db.prepare("SELECT * FROM bombero WHERE id=?").get(asignado_bombero_id);
-            if (!bombero) return notFound(res, "Bombero no encontrado");
-        }
 
         const nuevoId = db.transaction(() => {
             const info = db.prepare(`
-                INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, talla, estado, criticidad, ubicacion_actual_id, asignado_bombero_id, fecha_fabricacion)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(codigo, categoria, subcategoria, descripcion, marca, modelo, serie, talla, estado, criticidad, ubicacion_actual_id, asignado_bombero_id, fecha_fabricacion ?? null);
+                INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, talla, estado, criticidad, ubicacion_actual_id, fecha_fabricacion)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(codigo, categoria, subcategoria, descripcion, marca, modelo, serie, talla, estado, criticidad, ubicacion_actual_id, fecha_fabricacion ?? null);
 
             const itemId = info.lastInsertRowid;
-            const hacia = bombero
-                ? `Asignado a ${bombero.nombre}`
-                : ubicacion
-                    ? `Ubicado en ${ubicacion.nombre}`
-                    : "Sin asignar";
+            const hacia = ubicacion ? `Ubicado en ${ubicacion.nombre}` : "Sin asignar";
 
             db.prepare(`
                 INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha)
