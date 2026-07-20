@@ -10,6 +10,7 @@ const TIPOS_UBICACION    = ["BODEGA", "SALA", "SALON", "CONTAINER", "CARRO", "CA
 const TIPOS_CONTROL      = ["INSPECCION", "MANTENCION", "CERTIFICACION", "OTRO"];
 const RESULTADOS_CONTROL = ["APROBADO", "RECHAZADO", "PENDIENTE"];
 const ESTADOS_ASIGNACION = ["PENDIENTE", "CONFIRMADA", "CANCELADA"];
+const RESULTADOS_REVISION = ["OK", "FALLA", "FALTANTE"];
 const EXT_DOCUMENTO      = { pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png" };
 
 function isNil(v) {
@@ -98,7 +99,7 @@ function parseDocumentoBuffer(req, res) {
 module.exports = {
     upload,
     ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, ESTADOS_BOMBERO, TIPOS_UBICACION,
-    TIPOS_CONTROL, RESULTADOS_CONTROL, ESTADOS_ASIGNACION,
+    TIPOS_CONTROL, RESULTADOS_CONTROL, ESTADOS_ASIGNACION, RESULTADOS_REVISION,
     isNil, cleanText, badRequest, notFound, conflict, serverError,
     normXlsx, normFechaXlsx, parseXlsxBuffer, esFechaValida, fechaLocalISO, parseDocumentoBuffer,
 };

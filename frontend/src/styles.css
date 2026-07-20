@@ -671,3 +671,30 @@ h1, h2, h3 { margin: 0; }
 .dashboard-alerta--neutral { border-color: #555; }
 .dashboard-alerta--neutral .dashboard-alerta-num   { color: var(--text-dim); }
 .dashboard-alerta--neutral .dashboard-alerta-label { color: var(--text-dim); }
+
+/* ===== REVISION PUBLICA DE CARROS (sin login) ===== */
+.revision-publica { min-height: 100vh; background: var(--bg); }
+.revision-publica-header {
+    background: var(--surface);
+    border-bottom: 3px solid var(--accent);
+    padding: 0 20px;
+    height: 54px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.revision-btn {
+    flex: 1;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    border: 2px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-dim);
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.revision-btn--ok.revision-btn--activo    { border-color: var(--c-operativo); color: var(--c-operativo); background: rgba(76,175,80,.12); }
+.revision-btn--falla.revision-btn--activo { border-color: var(--c-fuera-servicio); color: var(--c-fuera-servicio); background: rgba(239,83,80,.12); }

@@ -132,7 +132,7 @@ router.get("/ubicaciones/:id", (req, res) => {
     if (!ubicacion) return notFound(res, "Ubicación no encontrada");
 
     const items = db.prepare(`
-        SELECT id, codigo, descripcion, categoria, subcategoria, estado, criticidad, marca, modelo
+        SELECT id, codigo, descripcion, categoria, subcategoria, estado, criticidad, marca, modelo, ubicacion_detalle
         FROM item WHERE ubicacion_actual_id = ?
         ORDER BY codigo
     `).all(id);
@@ -156,7 +156,13 @@ router.delete("/ubicaciones/:id", (req, res) => {
             });
         }
 
-        db.prepare("DELETE FROM ubicacion WHERE id=?").run(id);
+        db.transaction(() => {
+            // Historial de revisiones de carro que referencian esta ubicacion
+            db.prepare("DELETE FROM revision_carro_item WHERE revision_id IN (SELECT id FROM revision_carro WHERE ubicacion_id=?)").run(id);
+            db.prepare("DELETE FROM revision_carro WHERE ubicacion_id=?").run(id);
+            db.prepare("DELETE FROM ubicacion WHERE id=?").run(id);
+        })();
+
         res.json({ ok: true });
     } catch (e) {
         return serverError(res, e, "Error eliminando ubicacion");

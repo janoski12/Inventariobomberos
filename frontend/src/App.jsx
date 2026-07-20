@@ -11,13 +11,19 @@ import Bomberos from "./pages/Bomberos";
 import FichaBombero from "./pages/FichaBombero";
 import Ubicaciones from "./pages/Ubicaciones";
 import FichaUbicacion from "./pages/FichaUbicacion";
+import Carros from "./pages/Carros";
+import FichaCarro from "./pages/FichaCarro";
+import RevisionCarroPublica from "./pages/RevisionCarroPublica";
 import Reportes from "./pages/Reportes";
 import Importar from "./pages/Importar";
 import Trauma from "./pages/Trauma";
 import Login from "./pages/Login";
 import Usuarios from "./pages/Usuarios";
 
-function AppContent() {
+// Ficha autenticada de la app: requiere sesion. Se separa de AppContent para
+// que la ruta publica de revision de carros (sin login) pueda vivir al lado,
+// sin quedar bloqueada por el gate de autenticacion.
+function AppAutenticada() {
   const { usuario, cargando, logout, esAdmin } = useAuth();
   const [openPassword, setOpenPassword] = useState(false);
 
@@ -30,7 +36,7 @@ function AppContent() {
   }
 
   return (
-    <BrowserRouter>
+    <>
       <header className="app-header">
         <span className="app-header-badge">CBT10</span>
         <span className="app-header-title">Inventario Bomberos</span>
@@ -57,12 +63,26 @@ function AppContent() {
           <Route path="/bomberos/:id" element={<FichaBombero />} />
           <Route path="/ubicaciones" element={<Ubicaciones />} />
           <Route path="/ubicaciones/:id" element={<FichaUbicacion />} />
+          <Route path="/carros" element={<Carros />} />
+          <Route path="/carros/:id" element={<FichaCarro />} />
           <Route path="/reportes" element={<Reportes />} />
           <Route path="/importar" element={<Importar />} />
           <Route path="/trauma" element={<Trauma />} />
           {esAdmin && <Route path="/usuarios" element={<Usuarios />} />}
         </Routes>
       </main>
+    </>
+  );
+}
+
+function AppContent() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Publica: cualquier bombero, sin login, escaneando el QR de revision del carro */}
+        <Route path="/revision-carro/:id" element={<RevisionCarroPublica />} />
+        <Route path="/*" element={<AppAutenticada />} />
+      </Routes>
     </BrowserRouter>
   );
 }

@@ -340,6 +340,7 @@ router.post("/items/:id/mover", (req, res) => {
         const ubicacion_id = Number(req.body.ubicacion_id);
         const responsable = quienRegistra(req);
         const observacion = cleanText(req.body.observacion);
+        const ubicacion_detalle = cleanText(req.body.ubicacion_detalle);
 
         if (!Number.isInteger(id) || id <= 0){ return badRequest(res, "ID de item inválido"); }
         if (!Number.isInteger(ubicacion_id) || ubicacion_id <= 0){
@@ -359,7 +360,7 @@ router.post("/items/:id/mover", (req, res) => {
                 : "Sin asignación";
 
         const trx = db.transaction(() => {
-            db.prepare(`UPDATE item SET ubicacion_actual_id=?, asignado_bombero_id=NULL, actualizado_en=datetime('now','localtime') WHERE id=?`).run(ubicacion_id, id);
+            db.prepare(`UPDATE item SET ubicacion_actual_id=?, ubicacion_detalle=?, asignado_bombero_id=NULL, actualizado_en=datetime('now','localtime') WHERE id=?`).run(ubicacion_id, ubicacion_detalle, id);
             db.prepare(`INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha) VALUES (?, 'MOVIMIENTO', ?, ?, ?, ?, datetime('now','localtime'))`)
                 .run(id, desdeMover, `Ubicado en ${ubicacion.nombre}`, responsable, observacion);
         });
@@ -422,6 +423,7 @@ router.delete("/items/:id", (req, res) => {
             db.prepare("DELETE FROM uso_trauma WHERE item_id=?").run(id);
             db.prepare("DELETE FROM control   WHERE item_id=?").run(id);
             db.prepare("DELETE FROM acta_entrega_item WHERE item_id=?").run(id);
+            db.prepare("DELETE FROM revision_carro_item WHERE item_id=?").run(id);
             db.prepare("DELETE FROM movimiento WHERE item_id=?").run(id);
             db.prepare("DELETE FROM item       WHERE id=?").run(id);
         })();

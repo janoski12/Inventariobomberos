@@ -145,3 +145,28 @@ CREATE TABLE IF NOT EXISTS acta_entrega_item (
 
 CREATE INDEX IF NOT EXISTS idx_acta_entrega_bombero ON acta_entrega(bombero_id, estado);
 CREATE INDEX IF NOT EXISTS idx_acta_entrega_item_item ON acta_entrega_item(item_id);
+
+-- revision fisica de un carro (modulo Carros): la puede registrar cualquier
+-- bombero sin sesion, escaneando el QR de revision pegado en el carro
+CREATE TABLE IF NOT EXISTS revision_carro (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    ubicacion_id  INTEGER NOT NULL,
+    realizada_por TEXT NOT NULL,
+    fecha         TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    observacion_general TEXT,
+    FOREIGN KEY (ubicacion_id) REFERENCES ubicacion(id)
+);
+
+-- resultado de cada item incluido en una revision
+CREATE TABLE IF NOT EXISTS revision_carro_item (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    revision_id INTEGER NOT NULL,
+    item_id     INTEGER NOT NULL,
+    resultado   TEXT NOT NULL,
+    observacion TEXT,
+    FOREIGN KEY (revision_id) REFERENCES revision_carro(id),
+    FOREIGN KEY (item_id) REFERENCES item(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_revision_carro_ubicacion ON revision_carro(ubicacion_id, fecha);
+CREATE INDEX IF NOT EXISTS idx_revision_carro_item_revision ON revision_carro_item(revision_id);

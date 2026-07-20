@@ -19,6 +19,10 @@ fechas de vencimiento y registro de uso.
   movimiento de cada ítem.
 - **Bomberos** — gestión con RUT y N° de registro únicos, cargo y ficha con sus
   ítems asignados.
+- **Carros** — módulo aparte con los ítems asignados a los carros de bomberos,
+  su gaveta/compartimiento exacto y el historial de revisiones físicas. La
+  revisión la puede registrar cualquier bombero **sin cuenta en el sistema**,
+  escaneando el QR de revisión pegado en el carro.
 - **Ubicaciones** — gestión con código QR generado automáticamente (`UBIC-XXXX`),
   descargable como etiqueta PNG imprimible que enlaza a la ficha de la ubicación.
 - **Material de Trauma** — control de fechas de recepción/vencimiento, estado de
@@ -162,6 +166,33 @@ completo de actas pendientes de firma está en **Reportes**.
 `backend/assets/escudo.png` (PNG, fondo transparente recomendado), el acta la
 incluye automáticamente en el encabezado; si no existe el archivo, el
 encabezado se genera solo con texto.
+
+## Carros y revisión física
+
+El módulo **Carros** (menú superior) muestra solo las ubicaciones tipo `CARRO`
+con sus ítems, la gaveta/compartimiento donde va cada uno (se indica al mover
+un ítem a una ubicación) y cuántos ítems no están operativos ahora mismo.
+
+La revisión física la hace cualquier bombero, sin necesidad de cuenta:
+
+1. Desde el módulo Carros (o la ficha de un carro), un admin/operador descarga
+   el **QR de revisión** — distinto del QR de ficha — y lo pega dentro del carro.
+2. Cualquier bombero lo escanea con su teléfono y llega directo a un formulario
+   público (`/revision-carro/:id`) con la lista de ítems de ese carro.
+3. Marca cada ítem como OK / Falla / Faltante, agrega una observación si
+   corresponde, escribe su nombre y guarda. No necesita usuario ni clave.
+
+La revisión queda como un registro histórico aparte (no cambia el `estado`
+oficial del ítem): el encargado de material la revisa desde la ficha
+autenticada del carro y decide si corresponde cambiar el estado de algún ítem
+por el flujo normal.
+
+> **Nota de seguridad**: `/revision-carro/:id` es la única ruta pública del
+> sistema fuera de `/auth/login`. Solo permite leer los ítems de ESE carro y
+> registrar una revisión (no edita inventario ni expone otros datos), pero no
+> valida quién la envía más allá del nombre que la persona escribe — cualquiera
+> con el enlace o una foto del QR puede hacerlo. Es un riesgo aceptado para una
+> red interna de cuartel, no para un despliegue expuesto a internet.
 
 ## Respaldo y restauración
 

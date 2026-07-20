@@ -10,6 +10,8 @@ app.use(express.json());
 // ── API publica ──
 app.get("/api/health", (req, res) => res.json({ ok: true }));
 app.use("/api", require("./routes/auth"));   // /auth/login es publico; /auth/me y /auth/password validan internamente
+// Revision de carros sin sesion (QR pegado en el carro, cualquier bombero la completa)
+app.use("/api", require("./routes/carrosPublico"));
 
 // ── A partir de aqui toda la API requiere sesion ──
 app.use("/api", requireAuth);
@@ -19,6 +21,7 @@ app.use("/api", (req, res, next) => (req.method === "DELETE" ? requireAdmin(req,
 app.use("/api", require("./routes/usuarios"));   // ademas restringido a admin internamente
 app.use("/api", require("./routes/bomberos"));
 app.use("/api", require("./routes/ubicaciones"));
+app.use("/api", require("./routes/carros"));
 app.use("/api", require("./routes/items"));
 app.use("/api", require("./routes/actas"));
 app.use("/api", require("./routes/controles"));

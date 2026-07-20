@@ -34,6 +34,7 @@ export default function FichaItem() {
 
   const [formMover, setFormMover] = useState({
     ubicacion_id: "",
+    ubicacion_detalle: "",
     observacion: "",
   });
   const [formEstado, setFormEstado] = useState({
@@ -284,6 +285,9 @@ export default function FichaItem() {
           label="Ubicacion actual"
           value={item.ubicacion_nombre ?? "-"}
         />
+        {item.ubicacion_detalle && (
+          <InfoRow label="Gaveta / compartimiento" value={item.ubicacion_detalle} />
+        )}
         <InfoRow
           label="Marca/Modelo"
           value={`${item.marca ?? "-"} / ${item.modelo ?? "-"}`}
@@ -536,6 +540,18 @@ export default function FichaItem() {
           </label>
 
           <label>
+            Gaveta / compartimiento (opcional)
+            <input
+              value={formMover.ubicacion_detalle}
+              onChange={(e) =>
+                setFormMover((p) => ({ ...p, ubicacion_detalle: e.target.value }))
+              }
+              className="input"
+              placeholder="Ej: Gaveta 3, compartimiento lateral"
+            />
+          </label>
+
+          <label>
             Observacion
             <input
               value={formMover.observacion}
@@ -559,6 +575,7 @@ export default function FichaItem() {
                   setGuardando(true);
                   await moverItem(id, {
                     ubicacion_id: Number(formMover.ubicacion_id),
+                    ubicacion_detalle: formMover.ubicacion_detalle.trim() || null,
                     observacion: formMover.observacion || null,
                   });
                   await recargarFicha();

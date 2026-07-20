@@ -50,6 +50,9 @@ try { db.exec("ALTER TABLE movimiento ADD COLUMN asignacion_id INTEGER"); } catc
 // Migracion: talla (EPP con tallas: uniforme, botas, chaqueta, etc.)
 try { db.exec("ALTER TABLE item ADD COLUMN talla TEXT"); } catch {}
 
+// Migracion: ubicacion exacta dentro de un carro (gaveta/compartimiento)
+try { db.exec("ALTER TABLE item ADD COLUMN ubicacion_detalle TEXT"); } catch {}
+
 // La tabla asignacion_pendiente (un item por acta) se reemplazo por acta_entrega +
 // acta_entrega_item (varios items por acta). No hubo datos reales en producción
 // bajo el modelo anterior, asi que se descarta en vez de migrarla.

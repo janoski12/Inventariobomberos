@@ -448,3 +448,111 @@ describe("Importación parcial de ítems", () => {
         assert.equal(ficha.body.criticidad, "ALTA");
     });
 });
+
+describe("Módulo Carros y revisión pública", () => {
+    let carroId, itemId;
+
+    test("crear un carro y mover un item con gaveta/compartimiento", async () => {
+        const carro = await request(app).post("/api/ubicaciones").set(auth(adminToken))
+            .send({ nombre: "Carro Test 1", tipo: "CARRO" });
+        assert.equal(carro.status, 201);
+        carroId = carro.body.id;
+
+        const item = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ codigo: "CAR-001", categoria: "EPP", descripcion: "Casco Carro" });
+        itemId = item.body.id;
+
+        const mov = await request(app).post(`/api/items/${itemId}/mover`).set(auth(adminToken))
+            .send({ ubicacion_id: carroId, ubicacion_detalle: "Gaveta 2" });
+        assert.equal(mov.status, 200);
+
+        const ficha = await request(app).get(`/api/items/${itemId}`).set(auth(adminToken));
+        assert.equal(ficha.body.ubicacion_detalle, "Gaveta 2");
+    });
+
+    test("GET /carros (autenticado) requiere sesión → 401 sin token", async () => {
+        const res = await request(app).get("/api/carros");
+        assert.equal(res.status, 401);
+    });
+
+    test("GET /carros lista solo ubicaciones tipo CARRO con su resumen", async () => {
+        const res = await request(app).get("/api/carros").set(auth(adminToken));
+        assert.equal(res.status, 200);
+        const carro = res.body.find((c) => c.id === carroId);
+        assert.ok(carro, "el carro creado debe aparecer en el listado");
+        assert.equal(carro.total_items, 1);
+        assert.equal(carro.items_no_operativos, 0);
+        assert.equal(carro.ultima_revision, null);
+    });
+
+    test("GET /carros-publico/:id NO requiere sesión y solo expone datos del carro", async () => {
+        const res = await request(app).get(`/api/carros-publico/${carroId}`);
+        assert.equal(res.status, 200);
+        assert.equal(res.body.nombre, "Carro Test 1");
+        assert.equal(res.body.items.length, 1);
+        assert.equal(res.body.items[0].ubicacion_detalle, "Gaveta 2");
+    });
+
+    test("GET /carros-publico/:id sobre una ubicación que no es CARRO → 404", async () => {
+        const bodega = await request(app).post("/api/ubicaciones").set(auth(adminToken))
+            .send({ nombre: "Bodega No Carro", tipo: "BODEGA" });
+        const res = await request(app).get(`/api/carros-publico/${bodega.body.id}`);
+        assert.equal(res.status, 404);
+    });
+
+    test("POST revisión pública sin nombre → 400", async () => {
+        const res = await request(app).post(`/api/carros-publico/${carroId}/revisiones`)
+            .send({ items: [{ item_id: itemId, resultado: "OK" }] });
+        assert.equal(res.status, 400);
+    });
+
+    test("POST revisión pública con item que no pertenece al carro → 400", async () => {
+        const otroItem = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ codigo: "CAR-999", categoria: "EPP", descripcion: "Item ajeno" });
+        const res = await request(app).post(`/api/carros-publico/${carroId}/revisiones`)
+            .send({ realizada_por: "Bombero X", items: [{ item_id: otroItem.body.id, resultado: "OK" }] });
+        assert.equal(res.status, 400);
+    });
+
+    let revisionId;
+    test("POST revisión pública válida (sin token) queda registrada", async () => {
+        const res = await request(app).post(`/api/carros-publico/${carroId}/revisiones`)
+            .send({
+                realizada_por: "Bombero Revisor",
+                observacion_general: "Todo en orden salvo el casco",
+                items: [{ item_id: itemId, resultado: "FALLA", observacion: "Correa cortada" }],
+            });
+        assert.equal(res.status, 201);
+        revisionId = res.body.id;
+    });
+
+    test("la revisión aparece en el resumen y en la ficha autenticada del carro", async () => {
+        const lista = await request(app).get("/api/carros").set(auth(adminToken));
+        const carro = lista.body.find((c) => c.id === carroId);
+        assert.ok(carro.ultima_revision, "debe reflejar la última revisión");
+        assert.equal(carro.ultima_revision.realizada_por, "Bombero Revisor");
+        assert.equal(carro.ultima_revision.fallas, 1);
+
+        const ficha = await request(app).get(`/api/carros/${carroId}`).set(auth(adminToken));
+        assert.equal(ficha.body.revisiones.length, 1);
+        assert.equal(ficha.body.revisiones[0].fallas, 1);
+    });
+
+    test("GET /carros/:id/revisiones/:revisionId trae el detalle por item", async () => {
+        const res = await request(app).get(`/api/carros/${carroId}/revisiones/${revisionId}`).set(auth(adminToken));
+        assert.equal(res.status, 200);
+        assert.equal(res.body.items.length, 1);
+        assert.equal(res.body.items[0].resultado, "FALLA");
+        assert.equal(res.body.items[0].observacion, "Correa cortada");
+    });
+
+    test("no se puede confirmar dos veces la misma revisión sobre un item ya eliminado (cascada al borrar item)", async () => {
+        const del = await request(app).delete(`/api/items/${itemId}`).set(auth(adminToken));
+        assert.equal(del.status, 200, "eliminar un item con revisiones no debe fallar por FK");
+    });
+
+    test("eliminar el carro con historial de revisiones (sin items) no falla por FK", async () => {
+        const del = await request(app).delete(`/api/ubicaciones/${carroId}`).set(auth(adminToken));
+        assert.equal(del.status, 200);
+    });
+});

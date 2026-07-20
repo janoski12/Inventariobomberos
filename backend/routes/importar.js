@@ -71,6 +71,8 @@ router.post("/importar", requireAdmin, upload.single("archivo"), async (req, res
             db.prepare("DELETE FROM uso_trauma").run();
             db.prepare("DELETE FROM acta_entrega_item").run();
             db.prepare("DELETE FROM acta_entrega").run();
+            db.prepare("DELETE FROM revision_carro_item").run();
+            db.prepare("DELETE FROM revision_carro").run();
             db.prepare("DELETE FROM movimiento").run();
             db.prepare("DELETE FROM control").run();
             db.prepare("DELETE FROM item").run();
