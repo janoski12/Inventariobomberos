@@ -267,105 +267,137 @@ describe("Cambio de contraseña propio", () => {
     });
 });
 
-describe("Asignación a bombero con acta de entrega", () => {
-    let itemId, bomberoId, pendienteId;
+describe("Entrega de kit (uno o varios items) con acta de recepción", () => {
+    let item1Id, item2Id, bomberoId, actaId;
 
-    test("crear item y bombero de prueba", async () => {
-        const item = await request(app).post("/api/items").set(auth(adminToken))
-            .send({ codigo: "ACTA-001", categoria: "EPP", descripcion: "Casco acta" });
-        itemId = item.body.id;
+    test("crear items y bombero de prueba", async () => {
+        const i1 = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ codigo: "ACTA-001", categoria: "EPP", descripcion: "Casco acta", talla: "" });
+        const i2 = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ codigo: "ACTA-002", categoria: "EPP", descripcion: "Chaqueta acta", talla: "S" });
+        item1Id = i1.body.id;
+        item2Id = i2.body.id;
         const bom = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero Acta" });
         bomberoId = bom.body.id;
     });
 
-    test("solicitar asignación genera el acta y NO reasigna el item todavía", async () => {
-        const res = await request(app).post(`/api/items/${itemId}/asignaciones`).set(auth(adminToken))
-            .send({ bombero_id: bomberoId, observacion: "Entrega inicial" });
+    test("solicitar entrega de 2 items genera un acta y NO los reasigna todavía", async () => {
+        const res = await request(app).post("/api/actas-entrega").set(auth(adminToken))
+            .send({ bombero_id: bomberoId, item_ids: [item1Id, item2Id], observacion: "Kit inicial" });
         assert.equal(res.status, 201);
-        pendienteId = res.body.id;
+        actaId = res.body.id;
 
-        const ficha = await request(app).get(`/api/items/${itemId}`).set(auth(adminToken));
-        assert.equal(ficha.body.asignado_bombero_id, null, "el item no cambia de dueño hasta confirmar");
-        assert.ok(ficha.body.asignacion_pendiente, "debe reflejar la solicitud pendiente");
-        assert.equal(ficha.body.asignacion_pendiente.bombero_nombre, "Bombero Acta");
+        const ficha1 = await request(app).get(`/api/items/${item1Id}`).set(auth(adminToken));
+        const ficha2 = await request(app).get(`/api/items/${item2Id}`).set(auth(adminToken));
+        assert.equal(ficha1.body.asignado_bombero_id, null, "ningún item cambia de dueño hasta confirmar");
+        assert.equal(ficha2.body.asignado_bombero_id, null);
+        assert.ok(ficha1.body.acta_pendiente, "debe reflejar la solicitud pendiente");
+        assert.equal(ficha1.body.acta_pendiente.bombero_nombre, "Bombero Acta");
+        assert.equal(ficha1.body.acta_pendiente.items.length, 2, "la ficha muestra el kit completo, no solo este item");
+        assert.deepEqual(
+            ficha1.body.acta_pendiente.items.map(i => i.codigo).sort(),
+            ["ACTA-001", "ACTA-002"]
+        );
     });
 
-    test("no se puede solicitar una segunda asignación mientras hay una pendiente → 409", async () => {
-        const res = await request(app).post(`/api/items/${itemId}/asignaciones`).set(auth(adminToken))
-            .send({ bombero_id: bomberoId });
+    test("no se puede solicitar una nueva entrega mientras un item ya está en un acta pendiente → 409", async () => {
+        const res = await request(app).post("/api/actas-entrega").set(auth(adminToken))
+            .send({ bombero_id: bomberoId, item_ids: [item1Id] });
         assert.equal(res.status, 409);
     });
 
     test("el acta sin firmar se puede descargar como PDF", async () => {
-        const res = await request(app).get(`/api/asignaciones/${pendienteId}/documento`).set(auth(adminToken));
+        const res = await request(app).get(`/api/actas-entrega/${actaId}/documento`).set(auth(adminToken));
         assert.equal(res.status, 200);
         assert.match(res.headers["content-type"], /pdf/);
     });
 
     test("confirmar sin adjuntar archivo → 400", async () => {
-        const res = await request(app).post(`/api/asignaciones/${pendienteId}/confirmar`).set(auth(adminToken));
+        const res = await request(app).post(`/api/actas-entrega/${actaId}/confirmar`).set(auth(adminToken));
         assert.equal(res.status, 400);
     });
 
-    test("confirmar con el documento firmado asigna el item y registra el movimiento", async () => {
-        const res = await request(app).post(`/api/asignaciones/${pendienteId}/confirmar`).set(auth(adminToken))
+    test("confirmar con el documento firmado asigna AMBOS items y registra sus movimientos", async () => {
+        const res = await request(app).post(`/api/actas-entrega/${actaId}/confirmar`).set(auth(adminToken))
             .attach("archivo", Buffer.from("contenido de prueba"), "acta_firmada.jpg");
         assert.equal(res.status, 200);
 
-        const ficha = await request(app).get(`/api/items/${itemId}`).set(auth(adminToken));
-        assert.equal(ficha.body.asignado_bombero_id, bomberoId);
-        assert.equal(ficha.body.asignacion_pendiente, null);
+        const ficha1 = await request(app).get(`/api/items/${item1Id}`).set(auth(adminToken));
+        const ficha2 = await request(app).get(`/api/items/${item2Id}`).set(auth(adminToken));
+        assert.equal(ficha1.body.asignado_bombero_id, bomberoId);
+        assert.equal(ficha2.body.asignado_bombero_id, bomberoId);
+        assert.equal(ficha1.body.acta_pendiente, null);
 
-        const movs = await request(app).get(`/api/items/${itemId}/movimientos`).set(auth(adminToken));
-        const mov = movs.body.find(m => m.asignacion_id === pendienteId);
-        assert.ok(mov, "debe existir un movimiento ligado al acta");
-        assert.equal(mov.tipo, "ASIGNACION");
+        for (const itemId of [item1Id, item2Id]) {
+            const movs = await request(app).get(`/api/items/${itemId}/movimientos`).set(auth(adminToken));
+            const mov = movs.body.find(m => m.asignacion_id === actaId);
+            assert.ok(mov, `debe existir un movimiento ligado al acta para el item ${itemId}`);
+            assert.equal(mov.tipo, "ASIGNACION");
+        }
 
-        const firmado = await request(app).get(`/api/asignaciones/${pendienteId}/documento-firmado`).set(auth(adminToken));
+        const firmado = await request(app).get(`/api/actas-entrega/${actaId}/documento-firmado`).set(auth(adminToken));
         assert.equal(firmado.status, 200);
     });
 
     test("confirmar una solicitud ya resuelta → 400", async () => {
-        const res = await request(app).post(`/api/asignaciones/${pendienteId}/confirmar`).set(auth(adminToken))
+        const res = await request(app).post(`/api/actas-entrega/${actaId}/confirmar`).set(auth(adminToken))
             .attach("archivo", Buffer.from("x"), "otra.pdf");
         assert.equal(res.status, 400);
     });
 
-    test("cancelar una solicitud pendiente no modifica el item", async () => {
-        const item2 = await request(app).post("/api/items").set(auth(adminToken))
-            .send({ codigo: "ACTA-002", categoria: "EPP", descripcion: "Casco acta 2" });
-        const sol = await request(app).post(`/api/items/${item2.body.id}/asignaciones`).set(auth(adminToken))
-            .send({ bombero_id: bomberoId });
+    test("cancelar una solicitud pendiente no modifica ningún item", async () => {
+        const item3 = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ codigo: "ACTA-003", categoria: "EPP", descripcion: "Botas acta" });
+        const sol = await request(app).post("/api/actas-entrega").set(auth(adminToken))
+            .send({ bombero_id: bomberoId, item_ids: [item3.body.id] });
         assert.equal(sol.status, 201);
 
-        const cancel = await request(app).post(`/api/asignaciones/${sol.body.id}/cancelar`).set(auth(adminToken));
+        const cancel = await request(app).post(`/api/actas-entrega/${sol.body.id}/cancelar`).set(auth(adminToken));
         assert.equal(cancel.status, 200);
 
-        const ficha = await request(app).get(`/api/items/${item2.body.id}`).set(auth(adminToken));
+        const ficha = await request(app).get(`/api/items/${item3.body.id}`).set(auth(adminToken));
         assert.equal(ficha.body.asignado_bombero_id, null);
-        assert.equal(ficha.body.asignacion_pendiente, null);
+        assert.equal(ficha.body.acta_pendiente, null);
 
         // al estar cancelada, se puede volver a solicitar sobre el mismo item
-        const reintento = await request(app).post(`/api/items/${item2.body.id}/asignaciones`).set(auth(adminToken))
-            .send({ bombero_id: bomberoId });
+        const reintento = await request(app).post("/api/actas-entrega").set(auth(adminToken))
+            .send({ bombero_id: bomberoId, item_ids: [item3.body.id] });
         assert.equal(reintento.status, 201);
     });
 
     test("listado de pendientes solo incluye solicitudes en estado PENDIENTE", async () => {
-        const res = await request(app).get("/api/asignaciones?estado=PENDIENTE").set(auth(adminToken));
+        const res = await request(app).get("/api/actas-entrega?estado=PENDIENTE").set(auth(adminToken));
         assert.equal(res.status, 200);
         assert.ok(res.body.every(p => p.estado === undefined || p.estado === "PENDIENTE"));
-        assert.ok(!res.body.some(p => p.id === pendienteId), "la ya confirmada no debe aparecer");
+        assert.ok(!res.body.some(p => p.id === actaId), "la ya confirmada no debe aparecer");
     });
 
     test("eliminar un item con acta confirmada no falla por FK (cascada)", async () => {
-        const del = await request(app).delete(`/api/items/${itemId}`).set(auth(adminToken));
+        const del = await request(app).delete(`/api/items/${item1Id}`).set(auth(adminToken));
         assert.equal(del.status, 200);
     });
 
     test("eliminar un bombero con historial de actas no falla por FK (cascada)", async () => {
+        // item2 sigue asignado a este bombero: hay que liberarlo primero (regla de negocio aparte)
+        await request(app).delete(`/api/items/${item2Id}`).set(auth(adminToken));
         const del = await request(app).delete(`/api/bomberos/${bomberoId}`).set(auth(adminToken));
         assert.equal(del.status, 200);
+    });
+});
+
+describe("Campo talla", () => {
+    test("se puede crear y editar un item con talla, y viaja en la exportación", async () => {
+        const crea = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ codigo: "TALLA-001", categoria: "EPP", descripcion: "Chaqueta con talla", talla: "M" });
+        assert.equal(crea.status, 201);
+
+        const ficha = await request(app).get(`/api/items/${crea.body.id}`).set(auth(adminToken));
+        assert.equal(ficha.body.talla, "M");
+
+        const edit = await request(app).put(`/api/items/${crea.body.id}`).set(auth(adminToken)).send({ talla: "L" });
+        assert.equal(edit.status, 200);
+        const ficha2 = await request(app).get(`/api/items/${crea.body.id}`).set(auth(adminToken));
+        assert.equal(ficha2.body.talla, "L");
     });
 });
 

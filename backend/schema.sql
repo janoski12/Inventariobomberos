@@ -114,10 +114,11 @@ CREATE TABLE IF NOT EXISTS uso_trauma (
 
 CREATE INDEX IF NOT EXISTS idx_uso_trauma_item ON uso_trauma(item_id, fecha);
 
--- actas de entrega: toda asignacion a bombero exige un documento firmado antes de confirmarse
-CREATE TABLE IF NOT EXISTS asignacion_pendiente (
+-- actas de entrega: entregar uno o varios items a un bombero exige un documento
+-- firmado (acta de recepcion) antes de confirmarse. Una acta puede cubrir varios
+-- items a la vez (ej. kit completo de EPP), de ahi la tabla puente.
+CREATE TABLE IF NOT EXISTS acta_entrega (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    item_id     INTEGER NOT NULL,
     bombero_id  INTEGER NOT NULL,
     estado      TEXT NOT NULL DEFAULT 'PENDIENTE',
 
@@ -131,10 +132,16 @@ CREATE TABLE IF NOT EXISTS asignacion_pendiente (
     confirmado_por    TEXT,
     fecha_confirmacion TEXT,
 
-    FOREIGN KEY (item_id) REFERENCES item(id),
     FOREIGN KEY (bombero_id) REFERENCES bombero(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_asignacion_pendiente_item ON asignacion_pendiente(item_id, estado);
--- solo puede haber una solicitud PENDIENTE por item a la vez
-CREATE UNIQUE INDEX IF NOT EXISTS idx_asignacion_pendiente_unica ON asignacion_pendiente(item_id) WHERE estado = 'PENDIENTE';
+CREATE TABLE IF NOT EXISTS acta_entrega_item (
+    acta_id INTEGER NOT NULL,
+    item_id INTEGER NOT NULL,
+    PRIMARY KEY (acta_id, item_id),
+    FOREIGN KEY (acta_id) REFERENCES acta_entrega(id),
+    FOREIGN KEY (item_id) REFERENCES item(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_acta_entrega_bombero ON acta_entrega(bombero_id, estado);
+CREATE INDEX IF NOT EXISTS idx_acta_entrega_item_item ON acta_entrega_item(item_id);

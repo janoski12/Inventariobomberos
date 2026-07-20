@@ -2,6 +2,7 @@ const router = require("express").Router();
 const db = require("../db");
 const { ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, isNil, cleanText, badRequest, notFound, conflict, serverError, esFechaValida, fechaLocalISO } = require("../lib/helpers");
 const { quienRegistra } = require("../lib/auth");
+const { itemsDeActa } = require("./actas");
 
 //Crear items
 router.post("/items", (req, res) => {
@@ -13,6 +14,7 @@ router.post("/items", (req, res) => {
         const marca             = cleanText(req.body.marca);
         const modelo            = cleanText(req.body.modelo);
         const serie             = cleanText(req.body.serie);
+        const talla             = cleanText(req.body.talla);
         const estado            = cleanText(req.body.estado) || "OPERATIVO";
         const criticidad        = cleanText(req.body.criticidad) || "MEDIA";
         const fecha_fabricacion = cleanText(req.body.fecha_fabricacion);
@@ -61,9 +63,9 @@ router.post("/items", (req, res) => {
 
         const nuevoId = db.transaction(() => {
             const info = db.prepare(`
-                INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id, fecha_fabricacion)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id, fecha_fabricacion ?? null);
+                INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, talla, estado, criticidad, ubicacion_actual_id, asignado_bombero_id, fecha_fabricacion)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(codigo, categoria, subcategoria, descripcion, marca, modelo, serie, talla, estado, criticidad, ubicacion_actual_id, asignado_bombero_id, fecha_fabricacion ?? null);
 
             const itemId = info.lastInsertRowid;
             const hacia = bombero
@@ -150,6 +152,7 @@ router.put("/items/:id", (req, res) => {
         const marca = isNil(req.body.marca) ? actual.marca : cleanText(req.body.marca);
         const modelo = isNil(req.body.modelo) ? actual.modelo : cleanText(req.body.modelo);
         const serie = isNil(req.body.serie) ? actual.serie : cleanText(req.body.serie);
+        const talla = isNil(req.body.talla) ? actual.talla : cleanText(req.body.talla);
         const criticidad = cleanText(req.body.criticidad) ?? actual.criticidad;
 
         if (!codigo) return badRequest(res, "codigo es requerido");
@@ -178,6 +181,7 @@ router.put("/items/:id", (req, res) => {
             marca=?,
             modelo=?,
             serie=?,
+            talla=?,
             criticidad=?,
             actualizado_en=datetime('now','localtime')
             WHERE id=?
@@ -189,6 +193,7 @@ router.put("/items/:id", (req, res) => {
             marca,
             modelo,
             serie,
+            talla,
             criticidad,
             id
         );
@@ -246,7 +251,7 @@ router.get("/items/exportar", (req, res) => {
         const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
         const rows = db.prepare(`
             SELECT i.codigo, i.descripcion, i.categoria, i.subcategoria, i.estado, i.criticidad,
-                   i.marca, i.modelo, i.serie,
+                   i.marca, i.modelo, i.serie, i.talla,
                    b.nombre AS asignado_a, u.nombre AS ubicacion,
                    i.fecha_recepcion, i.fecha_vencimiento, i.fecha_fabricacion
             FROM item i
@@ -266,6 +271,7 @@ router.get("/items/exportar", (req, res) => {
             "Marca":              r.marca ?? "",
             "Modelo":             r.modelo ?? "",
             "Serie":              r.serie ?? "",
+            "Talla":              r.talla ?? "",
             "Asignado a":         r.asignado_a ?? "",
             "Ubicación":          r.ubicacion ?? "",
             "Fecha Fabricación":  r.fecha_fabricacion ?? "",
@@ -322,19 +328,22 @@ router.get("/items/:id", (req, res) => {
 
     if (!row) return res.status(404).json({ error: "Item no encontrado" });
 
-    // Asignación a bombero pendiente de firma, si la hay (bloquea nuevas solicitudes sobre este item)
-    row.asignacion_pendiente = db.prepare(`
-        SELECT ap.id, ap.observacion, ap.solicitado_por, ap.fecha_solicitud, b.nombre AS bombero_nombre
-        FROM asignacion_pendiente ap
-        JOIN bombero b ON b.id = ap.bombero_id
-        WHERE ap.item_id = ? AND ap.estado = 'PENDIENTE'
-    `).get(id) ?? null;
+    // Acta de entrega pendiente de firma que incluye este item, si la hay
+    // (bloquea nuevas solicitudes sobre el mismo item; puede incluir otros items del mismo kit)
+    const acta = db.prepare(`
+        SELECT ae.id, ae.observacion, ae.solicitado_por, ae.fecha_solicitud, b.nombre AS bombero_nombre
+        FROM acta_entrega_item ai
+        JOIN acta_entrega ae ON ae.id = ai.acta_id
+        JOIN bombero b ON b.id = ae.bombero_id
+        WHERE ai.item_id = ? AND ae.estado = 'PENDIENTE'
+    `).get(id);
+    row.acta_pendiente = acta ? { ...acta, items: itemsDeActa(acta.id) } : null;
 
     res.json(row);
 });
 
-// La asignación a bombero pasa por lib/asignaciones (acta de entrega + firma):
-// ver POST /items/:id/asignaciones y POST /asignaciones/:id/confirmar en routes/asignaciones.js
+// La entrega a bombero (uno o varios items) pasa por el acta de recepcion + firma:
+// ver POST /actas-entrega y POST /actas-entrega/:id/confirmar en routes/actas.js
 
 router.post("/items/:id/mover", (req, res) => {
     try {
@@ -423,7 +432,7 @@ router.delete("/items/:id", (req, res) => {
         db.transaction(() => {
             db.prepare("DELETE FROM uso_trauma WHERE item_id=?").run(id);
             db.prepare("DELETE FROM control   WHERE item_id=?").run(id);
-            db.prepare("DELETE FROM asignacion_pendiente WHERE item_id=?").run(id);
+            db.prepare("DELETE FROM acta_entrega_item WHERE item_id=?").run(id);
             db.prepare("DELETE FROM movimiento WHERE item_id=?").run(id);
             db.prepare("DELETE FROM item       WHERE id=?").run(id);
         })();

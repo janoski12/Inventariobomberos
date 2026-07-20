@@ -2,11 +2,12 @@ import { useEffect } from "react";
 import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { obtenerItem, obtenerMovimientos, cambiarEstadoItem, moverItem, actualizarItem, eliminarItem, obtenerSubcategorias, obtenerMarcas, obtenerModelos } from "../api/items";
-import { solicitarAsignacion, confirmarAsignacion, cancelarAsignacion, abrirDocumento, abrirDocumentoFirmado } from "../api/asignaciones";
+import { cancelarActaEntrega, abrirDocumento, abrirDocumentoFirmado } from "../api/actas";
 import CreatableSelect from "../components/CreatableSelect";
+import EntregaKitModal from "../components/EntregaKitModal";
+import ConfirmarActaModal from "../components/ConfirmarActaModal";
 import { useDialog } from "../context/DialogContext";
 import { useAuth } from "../context/AuthContext";
-import { listarBomberos } from "../api/bomberos";
 import { listarUbicaciones } from "../api/ubicaciones";
 import Modal from "../components/Modal";
 import { obtenerControles, crearControl, completarControl } from "../api/controles";
@@ -23,20 +24,14 @@ export default function FichaItem() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
-  const [bomberos, setBomberos] = useState([]);
   const [ubicaciones, setUbicaciones] = useState([]);
 
   const [openAsignar, setOpenAsignar] = useState(false);
   const [openMover, setOpenMover] = useState(false);
   const [openEstado, setOpenEstado] = useState(false);
   const [openConfirmarFirma, setOpenConfirmarFirma] = useState(false);
-  const [archivoFirmado, setArchivoFirmado] = useState(null);
   const [procesandoFirma, setProcesandoFirma] = useState(false);
 
-  const [formAsignar, setFormAsignar] = useState({
-    bombero_id: "",
-    observacion: "",
-  });
   const [formMover, setFormMover] = useState({
     ubicacion_id: "",
     observacion: "",
@@ -96,10 +91,9 @@ export default function FichaItem() {
       setCargando(true);
 
       try {
-        const [it, ms, boms, ubs, cs] = await Promise.all([
+        const [it, ms, ubs, cs] = await Promise.all([
           obtenerItem(id),
           obtenerMovimientos(id).catch(() => []),
-          listarBomberos().catch(() => []),
           listarUbicaciones().catch(() => []),
           obtenerControles(id).catch(() => []),
         ]);
@@ -107,7 +101,6 @@ export default function FichaItem() {
         if (!cancelado) {
           setItem(it);
           setMovs(ms);
-          setBomberos(boms);
           setUbicaciones(ubs);
           setControles(cs);
         }
@@ -155,24 +148,30 @@ export default function FichaItem() {
         {item.codigo} - {item.descripcion}
       </h2>
 
-      {/* BANNER: asignación pendiente de firma */}
-      {item.asignacion_pendiente && (
+      {/* BANNER: acta de entrega pendiente de firma (puede incluir otros items del mismo kit) */}
+      {item.acta_pendiente && (
         <div className="card card--pendiente-firma" style={{ marginTop: 10 }}>
           <div className="spread">
             <div>
               <div className="card-title">⏳ Pendiente de firma</div>
               <div className="card-detail">
-                Asignación solicitada a <b>{item.asignacion_pendiente.bombero_nombre}</b>
+                Entrega solicitada a <b>{item.acta_pendiente.bombero_nombre}</b>
                 <br />
-                Solicitada el {item.asignacion_pendiente.fecha_solicitud} por {item.asignacion_pendiente.solicitado_por}
-                {item.asignacion_pendiente.observacion ? <><br />Obs: {item.asignacion_pendiente.observacion}</> : null}
+                Solicitada el {item.acta_pendiente.fecha_solicitud} por {item.acta_pendiente.solicitado_por}
+                {item.acta_pendiente.observacion ? <><br />Obs: {item.acta_pendiente.observacion}</> : null}
+                {item.acta_pendiente.items.length > 1 && (
+                  <>
+                    <br />
+                    Incluye: {item.acta_pendiente.items.map((it) => it.codigo).join(", ")}
+                  </>
+                )}
               </div>
             </div>
             <div className="row">
               <button
                 className="btn-light"
                 onClick={async () => {
-                  try { await abrirDocumento(item.asignacion_pendiente.id); }
+                  try { await abrirDocumento(item.acta_pendiente.id); }
                   catch { toast("No se pudo abrir el documento."); }
                 }}
               >
@@ -180,7 +179,7 @@ export default function FichaItem() {
               </button>
               <button
                 className="btn"
-                onClick={() => { setArchivoFirmado(null); setOpenConfirmarFirma(true); }}
+                onClick={() => setOpenConfirmarFirma(true)}
               >
                 Subir documento firmado
               </button>
@@ -188,10 +187,10 @@ export default function FichaItem() {
                 className="btn-danger"
                 disabled={procesandoFirma}
                 onClick={async () => {
-                  if (!await confirm("¿Cancelar esta solicitud de asignación? El ítem seguirá donde está.")) return;
+                  if (!await confirm("¿Cancelar esta solicitud de entrega? Ningún ítem cambiará de dueño.")) return;
                   try {
                     setProcesandoFirma(true);
-                    await cancelarAsignacion(item.asignacion_pendiente.id);
+                    await cancelarActaEntrega(item.acta_pendiente.id);
                     await recargarFicha();
                     toast("Solicitud cancelada", "success");
                   } catch (e) {
@@ -210,7 +209,7 @@ export default function FichaItem() {
 
       {/* BARRA DE ACCIONES */}
       <div className="row">
-        {!item.asignacion_pendiente && (
+        {!item.acta_pendiente && (
           <button
             className="btn"
             onClick={() => {
@@ -265,6 +264,7 @@ export default function FichaItem() {
               marca: item.marca ?? "",
               modelo: item.modelo ?? "",
               serie: item.serie ?? "",
+              talla: item.talla ?? "",
               criticidad: item.criticidad ?? "MEDIA",
             });
             setOpenEditDatos(true);
@@ -289,6 +289,7 @@ export default function FichaItem() {
           value={`${item.marca ?? "-"} / ${item.modelo ?? "-"}`}
         />
         <InfoRow label="Serie" value={item.serie ?? "-"} />
+        <InfoRow label="Talla" value={item.talla ?? "-"} />
         {item.fecha_fabricacion && (
           <>
             <InfoRow label="Fabricación"       value={item.fecha_fabricacion} />
@@ -492,131 +493,22 @@ export default function FichaItem() {
         </div>
       </Modal>
 
-      {/* MODAL ASIGNAR (solicita el acta de entrega; el item se asigna recién al confirmar con la firma) */}
-      <Modal
+      {/* Solicita el acta de entrega (puede incluir más items del mismo kit); el item se
+          asigna recién al confirmar con la firma */}
+      <EntregaKitModal
         open={openAsignar}
-        title="Asignar a bombero"
         onClose={() => setOpenAsignar(false)}
-      >
-        <div className="stack">
-          <p className="muted">
-            Se generará un acta de entrega en PDF. Debe imprimirse, ser firmada por
-            quien recibe el equipo, y luego subirse (foto o escaneo) para confirmar la asignación.
-          </p>
+        itemFijo={{ id: item.id, codigo: item.codigo, descripcion: item.descripcion }}
+        onDone={recargarFicha}
+      />
 
-          <label className="label">
-            Bombero
-            <select
-              value={formAsignar.bombero_id}
-              onChange={(e) =>
-                setFormAsignar((p) => ({ ...p, bombero_id: e.target.value }))
-              }
-              className="input"
-            >
-              <option value="">-- Selecciona --</option>
-              {bomberos.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.nombre} {b.cargo ? `(${b.cargo})` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="label">
-            Observacion
-            <input
-              value={formAsignar.observacion}
-              onChange={(e) =>
-                setFormAsignar((p) => ({ ...p, observacion: e.target.value }))
-              }
-              className="input"
-              placeholder="Ej: Entega EPP"
-            />
-          </label>
-
-          <div className="row" style={{ justifyContent: "flex-end" }}>
-            <button onClick={() => setOpenAsignar(false)} className="btn-light">
-              Cancelar
-            </button>
-            <button
-              disabled={guardando || !formAsignar.bombero_id}
-              className="btn"
-              onClick={async () => {
-                try {
-                  setGuardando(true);
-                  const { id: pendienteId } = await solicitarAsignacion(id, {
-                    bombero_id: Number(formAsignar.bombero_id),
-                    observacion: formAsignar.observacion || null,
-                  });
-                  await recargarFicha();
-                  setOpenAsignar(false);
-                  setFormAsignar({ bombero_id: "", observacion: "" });
-                  toast("Acta generada. Imprímela, fírmala y súbela para confirmar.", "success");
-                  await abrirDocumento(pendienteId);
-                } catch (e) {
-                  console.error(e);
-                  toast(e.message || "No se pudo generar la solicitud.");
-                } finally {
-                  setGuardando(false);
-                }
-              }}
-            >
-              Generar acta de entrega
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* MODAL CONFIRMAR FIRMA: sube el acta firmada; recién aquí se concreta la asignación */}
-      <Modal
+      {/* Sube el acta firmada; recién aquí se concreta la entrega */}
+      <ConfirmarActaModal
         open={openConfirmarFirma}
-        title="Subir documento firmado"
         onClose={() => setOpenConfirmarFirma(false)}
-      >
-        <div className="stack">
-          <p className="muted">
-            Sube una foto o escaneo del acta ya firmada (PDF, JPG o PNG). El ítem
-            quedará asignado al bombero recién al confirmar.
-          </p>
-
-          <label className="importar-label" htmlFor="input-acta-firmada">
-            {archivoFirmado ? archivoFirmado.name : "Seleccionar archivo (PDF, JPG o PNG)"}
-          </label>
-          <input
-            id="input-acta-firmada"
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png"
-            className="importar-input"
-            onChange={(e) => setArchivoFirmado(e.target.files[0] ?? null)}
-          />
-
-          <div className="row" style={{ justifyContent: "flex-end" }}>
-            <button onClick={() => setOpenConfirmarFirma(false)} className="btn-light">
-              Cancelar
-            </button>
-            <button
-              disabled={!archivoFirmado || procesandoFirma}
-              className="btn"
-              onClick={async () => {
-                try {
-                  setProcesandoFirma(true);
-                  await confirmarAsignacion(item.asignacion_pendiente.id, archivoFirmado);
-                  await recargarFicha();
-                  toast("Asignación confirmada", "success");
-                  setOpenConfirmarFirma(false);
-                  setArchivoFirmado(null);
-                } catch (e) {
-                  toast(e.message || "No se pudo confirmar la asignación.");
-                } finally {
-                  setProcesandoFirma(false);
-                }
-              }}
-            >
-              {procesandoFirma ? "Confirmando..." : "Confirmar asignación"}
-            </button>
-          </div>
-        </div>
-      </Modal>
+        actaId={item.acta_pendiente?.id}
+        onDone={recargarFicha}
+      />
 
       {/* MODAL MOVER */}
       <Modal
@@ -840,6 +732,18 @@ export default function FichaItem() {
             </label>
 
             <label className="label">
+              Talla
+              <input
+                className="input"
+                value={editDatos.talla}
+                onChange={(e) =>
+                  setEditDatos((p) => ({ ...p, talla: e.target.value }))
+                }
+                placeholder="Ej: S, M, L, 38, 40"
+              />
+            </label>
+
+            <label className="label">
               Criticidad
               <select
                 className="input"
@@ -881,6 +785,7 @@ export default function FichaItem() {
                       marca: editDatos.marca.trim() || null,
                       modelo: editDatos.modelo.trim() || null,
                       serie: editDatos.serie.trim() || null,
+                      talla: editDatos.talla.trim() || null,
                       criticidad: editDatos.criticidad,
                     });
 

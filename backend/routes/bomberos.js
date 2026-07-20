@@ -111,7 +111,8 @@ router.delete("/bomberos/:id", (req, res) => {
 
         db.transaction(() => {
             // Actas de entrega (historicas o pendientes) que referencian a este bombero
-            db.prepare("DELETE FROM asignacion_pendiente WHERE bombero_id=?").run(id);
+            db.prepare("DELETE FROM acta_entrega_item WHERE acta_id IN (SELECT id FROM acta_entrega WHERE bombero_id=?)").run(id);
+            db.prepare("DELETE FROM acta_entrega WHERE bombero_id=?").run(id);
             db.prepare("DELETE FROM bombero WHERE id=?").run(id);
         })();
 

@@ -12,9 +12,11 @@ fechas de vencimiento y registro de uso.
   (con cálculo de tiempo en servicio).
 - **Asignación y trazabilidad** — cada ítem se asigna a un bombero o ubicación;
   todo movimiento queda registrado en su historial a nombre del usuario que lo hizo.
-- **Acta de entrega firmada** — al asignar un ítem a un bombero, el sistema genera
-  un acta en PDF; la asignación queda pendiente hasta subir el documento firmado
-  (foto o escaneo), que se guarda ligado al movimiento.
+- **Acta de recepción firmada** — al entregar uno o varios ítems a un bombero
+  (un kit completo de EPP en una sola acta), el sistema genera el acta de
+  recepción oficial de la compañía en PDF; la entrega queda pendiente hasta
+  subir el documento firmado (foto o escaneo), que se guarda ligado al
+  movimiento de cada ítem.
 - **Bomberos** — gestión con RUT y N° de registro únicos, cargo y ficha con sus
   ítems asignados.
 - **Ubicaciones** — gestión con código QR generado automáticamente (`UBIC-XXXX`),
@@ -133,21 +135,33 @@ Basta con:
 2. Usar el sistema desde esa IP (p.ej. `http://192.168.1.10:3001`) al descargar
    las etiquetas QR: cualquier teléfono de la red podrá escanearlas y abrir la ficha.
 
-## Acta de entrega y firma
+## Acta de recepción y firma
 
-Al asignar un ítem a un bombero (botón *Asignar a bombero* en la ficha del ítem):
+El acta reproduce el formato oficial de la 10° Compañía (Cuerpo de Bomberos de
+Temuco): encabezado institucional, tabla de elementos con Talla/Cantidad/Marca,
+y dos firmas (voluntario que recibe y Capitán de Compañía). Se puede entregar
+un solo ítem o un kit completo (ej. uniforme + botas + casco) en una sola acta:
 
-1. El sistema genera un **acta de entrega** en PDF (datos del bombero, del ítem y
-   espacio para firma) y la abre en una pestaña nueva para imprimirla. El ítem
-   **todavía no cambia de dueño** — queda marcado como *pendiente de firma*.
-2. Se imprime el acta y la firma la persona que recibe el equipo.
-3. En la ficha del ítem, *Subir documento firmado* — una foto o escaneo (PDF, JPG
-   o PNG) del acta ya firmada. Recién en ese momento el ítem queda asignado, y el
-   documento firmado queda disponible desde el historial de movimientos.
+1. Desde la ficha de un ítem (*Asignar a bombero*) o la ficha de un bombero
+   (*Entregar equipo*) se abre el mismo formulario: elegir el bombero y agregar
+   uno o varios ítems (buscador con checklist). Al generar, el sistema arma el
+   **acta de recepción** en PDF con todos los ítems en la tabla y la abre en una
+   pestaña nueva para imprimirla. Los ítems **todavía no cambian de dueño** —
+   quedan marcados como *pendientes de firma*.
+2. Se imprime el acta y la firman el voluntario y quien la emite.
+3. Desde la ficha del ítem o del bombero, *Subir documento firmado* — una foto o
+   escaneo (PDF, JPG o PNG) del acta ya firmada. Recién en ese momento **todos**
+   los ítems del acta quedan asignados, y el documento firmado queda disponible
+   desde el historial de movimientos de cada uno (*Ver acta firmada*).
 
-Mientras una solicitud está pendiente, ese ítem no admite una segunda solicitud de
-asignación (se puede cancelar la pendiente desde el mismo banner). El listado
+Mientras una solicitud está pendiente, esos ítems no admiten una segunda
+solicitud (se puede cancelar la pendiente desde el mismo banner). El listado
 completo de actas pendientes de firma está en **Reportes**.
+
+**Escudo de la compañía**: si se coloca una imagen en
+`backend/assets/escudo.png` (PNG, fondo transparente recomendado), el acta la
+incluye automáticamente en el encabezado; si no existe el archivo, el
+encabezado se genera solo con texto.
 
 ## Respaldo y restauración
 

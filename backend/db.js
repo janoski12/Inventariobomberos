@@ -47,6 +47,14 @@ try { db.exec("UPDATE ubicacion SET codigo_qr = 'UBIC-' || printf('%04d', id) WH
 // Migracion: vincula el movimiento de asignacion con el acta de entrega que lo respalda
 try { db.exec("ALTER TABLE movimiento ADD COLUMN asignacion_id INTEGER"); } catch {}
 
+// Migracion: talla (EPP con tallas: uniforme, botas, chaqueta, etc.)
+try { db.exec("ALTER TABLE item ADD COLUMN talla TEXT"); } catch {}
+
+// La tabla asignacion_pendiente (un item por acta) se reemplazo por acta_entrega +
+// acta_entrega_item (varios items por acta). No hubo datos reales en producción
+// bajo el modelo anterior, asi que se descarta en vez de migrarla.
+try { db.exec("DROP TABLE IF EXISTS asignacion_pendiente"); } catch {}
+
 // Seed: si no existe ningun usuario, crear admin inicial (admin / admin123)
 try {
     const { total } = db.prepare("SELECT COUNT(*) AS total FROM usuario").get();

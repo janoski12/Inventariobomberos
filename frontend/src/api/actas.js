@@ -14,34 +14,34 @@ const json = (payload) => ({
   body: JSON.stringify(payload),
 });
 
-// Solicita la asignación de un item a un bombero: genera el acta de entrega
-// (el item no cambia de dueño hasta confirmar con el documento firmado)
-export function solicitarAsignacion(itemId, payload) {
-  return request(`${API_URL}/items/${itemId}/asignaciones`, { method: "POST", ...json(payload) });
+// Solicita la entrega de uno o varios items a un bombero: genera el acta de
+// recepción (los items no cambian de dueño hasta confirmar con la firma)
+export function solicitarActaEntrega(payload) {
+  return request(`${API_URL}/actas-entrega`, { method: "POST", ...json(payload) });
 }
 
-export function confirmarAsignacion(id, archivo) {
+export function confirmarActaEntrega(id, archivo) {
   const fd = new FormData();
   fd.append("archivo", archivo);
-  return request(`${API_URL}/asignaciones/${id}/confirmar`, { method: "POST", body: fd });
+  return request(`${API_URL}/actas-entrega/${id}/confirmar`, { method: "POST", body: fd });
 }
 
-export function cancelarAsignacion(id) {
-  return request(`${API_URL}/asignaciones/${id}/cancelar`, { method: "POST" });
+export function cancelarActaEntrega(id) {
+  return request(`${API_URL}/actas-entrega/${id}/cancelar`, { method: "POST" });
 }
 
-export function listarAsignacionesPendientes() {
-  return request(`${API_URL}/asignaciones?estado=PENDIENTE`);
+export function listarActasPendientes() {
+  return request(`${API_URL}/actas-entrega?estado=PENDIENTE`);
 }
 
 // Abre el acta sin firmar (para imprimirla)
 export function abrirDocumento(id) {
-  return _abrirEnNuevaPestana(`${API_URL}/asignaciones/${id}/documento`);
+  return _abrirEnNuevaPestana(`${API_URL}/actas-entrega/${id}/documento`);
 }
 
 // Abre el documento firmado que se subió al confirmar
 export function abrirDocumentoFirmado(id) {
-  return _abrirEnNuevaPestana(`${API_URL}/asignaciones/${id}/documento-firmado`);
+  return _abrirEnNuevaPestana(`${API_URL}/actas-entrega/${id}/documento-firmado`);
 }
 
 // Abre la pestaña ANTES del fetch (gesto del usuario) para evitar que el

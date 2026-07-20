@@ -26,6 +26,7 @@ export default function NuevoItem() {
     marca: "",
     modelo: "",
     serie: "",
+    talla: "",
     fecha_fabricacion: "",
     estado: "OPERATIVO",
     criticidad: "ALTA",
@@ -180,6 +181,16 @@ export default function NuevoItem() {
           </label>
 
           <label className="label">
+            Talla
+            <input
+              className="input"
+              value={form.talla}
+              onChange={(e) => setForm((p) => ({ ...p, talla: e.target.value }))}
+              placeholder="Ej: S, M, L, 38, 40"
+            />
+          </label>
+
+          <label className="label">
             Fecha de fabricación
             <input
               type="date"
@@ -275,6 +286,7 @@ export default function NuevoItem() {
                   marca: form.marca.trim() || null,
                   modelo: form.modelo.trim() || null,
                   serie: form.serie.trim() || null,
+                  talla: form.talla.trim() || null,
                   fecha_fabricacion: form.fecha_fabricacion || null,
                   estado: form.estado,
                   criticidad: form.criticidad,

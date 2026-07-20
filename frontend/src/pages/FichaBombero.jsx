@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { obtenerBombero } from "../api/bomberos";
+import { listarActasPendientes, abrirDocumento, cancelarActaEntrega } from "../api/actas";
+import EntregaKitModal from "../components/EntregaKitModal";
+import ConfirmarActaModal from "../components/ConfirmarActaModal";
+import { useDialog } from "../context/DialogContext";
 
 const CHIP_ESTADO_ITEM = {
   OPERATIVO:      "chip chip--operativo",
@@ -16,20 +20,33 @@ const CHIP_CRIT = {
 
 export default function FichaBombero() {
   const { id } = useParams();
+  const { toast, confirm } = useDialog();
   const [bombero, setBombero] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError]     = useState("");
+  const [actasPendientes, setActasPendientes] = useState([]);
+  const [openEntrega, setOpenEntrega] = useState(false);
+  const [actaAConfirmar, setActaAConfirmar] = useState(null);
+  const [procesando, setProcesando] = useState(false);
 
-  useEffect(() => {
-    async function cargar() {
-      setCargando(true);
-      setError("");
-      try { setBombero(await obtenerBombero(id)); }
-      catch { setError("No se pudo cargar la ficha del bombero."); }
-      finally { setCargando(false); }
+  async function cargar() {
+    setCargando(true);
+    setError("");
+    try {
+      const [b, actas] = await Promise.all([
+        obtenerBombero(id),
+        listarActasPendientes().catch(() => []),
+      ]);
+      setBombero(b);
+      setActasPendientes(actas.filter((a) => a.bombero_id === Number(id)));
+    } catch {
+      setError("No se pudo cargar la ficha del bombero.");
+    } finally {
+      setCargando(false);
     }
-    cargar();
-  }, [id]);
+  }
+
+  useEffect(() => { cargar(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (cargando) return <div className="container"><p className="muted">Cargando...</p></div>;
   if (error)    return <div className="container"><Link to="/bomberos">← Volver</Link><p className="error">{error}</p></div>;
@@ -43,7 +60,77 @@ export default function FichaBombero() {
         <span className={bombero.estado === "ACTIVO" ? "chip chip--operativo" : "chip chip--baja"}>
           {bombero.estado ?? "ACTIVO"}
         </span>
+        <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setOpenEntrega(true)}>
+          Entregar equipo
+        </button>
       </div>
+
+      {/* Actas de entrega pendientes de firma */}
+      {actasPendientes.length > 0 && (
+        <div className="stack" style={{ marginBottom: 16 }}>
+          {actasPendientes.map((a) => (
+            <div key={a.id} className="card card--pendiente-firma">
+              <div className="spread">
+                <div>
+                  <div className="card-title">⏳ Pendiente de firma</div>
+                  <div className="card-detail">
+                    Solicitada el {a.fecha_solicitud} por {a.solicitado_por}
+                    <br />
+                    Ítems: {a.items.map((it) => it.codigo).join(", ")}
+                  </div>
+                </div>
+                <div className="row">
+                  <button
+                    className="btn-light"
+                    onClick={async () => {
+                      try { await abrirDocumento(a.id); }
+                      catch { toast("No se pudo abrir el documento."); }
+                    }}
+                  >
+                    Ver / imprimir acta
+                  </button>
+                  <button className="btn" onClick={() => setActaAConfirmar(a.id)}>
+                    Subir documento firmado
+                  </button>
+                  <button
+                    className="btn-danger"
+                    disabled={procesando}
+                    onClick={async () => {
+                      if (!await confirm("¿Cancelar esta solicitud de entrega? Ningún ítem cambiará de dueño.")) return;
+                      try {
+                        setProcesando(true);
+                        await cancelarActaEntrega(a.id);
+                        await cargar();
+                        toast("Solicitud cancelada", "success");
+                      } catch (e) {
+                        toast(e.message);
+                      } finally {
+                        setProcesando(false);
+                      }
+                    }}
+                  >
+                    Cancelar solicitud
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <EntregaKitModal
+        open={openEntrega}
+        onClose={() => setOpenEntrega(false)}
+        bomberoFijo={{ id: bombero.id, nombre: bombero.nombre }}
+        onDone={cargar}
+      />
+
+      <ConfirmarActaModal
+        open={actaAConfirmar != null}
+        onClose={() => setActaAConfirmar(null)}
+        actaId={actaAConfirmar}
+        onDone={cargar}
+      />
 
       {/* Datos del bombero */}
       <div className="card" style={{ marginBottom: 20 }}>

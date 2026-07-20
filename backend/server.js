@@ -20,7 +20,7 @@ app.use("/api", require("./routes/usuarios"));   // ademas restringido a admin i
 app.use("/api", require("./routes/bomberos"));
 app.use("/api", require("./routes/ubicaciones"));
 app.use("/api", require("./routes/items"));
-app.use("/api", require("./routes/asignaciones"));
+app.use("/api", require("./routes/actas"));
 app.use("/api", require("./routes/controles"));
 app.use("/api", require("./routes/trauma"));
 app.use("/api", require("./routes/reportes"));

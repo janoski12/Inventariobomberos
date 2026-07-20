@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { obtenerReportes, descargarPlantilla } from "../api/reportes";
-import { listarAsignacionesPendientes, abrirDocumento } from "../api/asignaciones";
+import { listarActasPendientes, abrirDocumento } from "../api/actas";
 import { useDialog } from "../context/DialogContext";
 
 const CLASE_ESTADO = {
@@ -30,7 +30,7 @@ export default function Reportes() {
       .then((d) => setData(d))
       .catch(() => setError("No se pudieron cargar los reportes."))
       .finally(() => setCargando(false));
-    listarAsignacionesPendientes().catch(() => []).then(setPendientesFirma);
+    listarActasPendientes().catch(() => []).then(setPendientesFirma);
   }, []);
 
   if (cargando) return <div className="container"><p>Cargando...</p></div>;
@@ -162,9 +162,9 @@ export default function Reportes() {
         </div>
       )}
 
-      {/* ASIGNACIONES PENDIENTES DE FIRMA */}
+      {/* ACTAS DE ENTREGA PENDIENTES DE FIRMA */}
       <div className="spread" style={{ marginBottom: 10 }}>
-        <h3>Asignaciones pendientes de firma</h3>
+        <h3>Actas de entrega pendientes de firma</h3>
         {pendientesFirma.length > 0 && (
           <span className="badge-warning">{pendientesFirma.length} pendiente{pendientesFirma.length !== 1 ? "s" : ""}</span>
         )}
@@ -177,12 +177,16 @@ export default function Reportes() {
             <div key={p.id} className="card card--pendiente-firma">
               <div className="spread">
                 <div>
-                  <Link to={`/items/${p.item_id}`} style={{ textDecoration: "none" }}>
-                    <span className="item-code">{p.item_codigo}</span>
-                    <span className="item-desc">{p.item_descripcion}</span>
-                  </Link>
+                  <div className="item-desc" style={{ marginLeft: 0 }}>Para <b>{p.bombero_nombre}</b></div>
                   <div className="item-tipo">
-                    Para {p.bombero_nombre} · solicitada el {p.fecha_solicitud} por {p.solicitado_por}
+                    {p.items.map((it) => (
+                      <Link key={it.id} to={`/items/${it.id}`} style={{ textDecoration: "none" }}>
+                        <span className="item-code">{it.codigo}</span>
+                      </Link>
+                    ))}
+                  </div>
+                  <div className="item-tipo">
+                    Solicitada el {p.fecha_solicitud} por {p.solicitado_por}
                   </div>
                 </div>
                 <button
