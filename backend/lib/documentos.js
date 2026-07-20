@@ -130,6 +130,9 @@ function generarActaEntrega(id, { bombero, items, solicitadoPor, fecha, observac
         doc.text("Firma Capitán de Compañía", MARGEN + anchoFirma + 30, yFirma + 4, { width: anchoFirma, align: "center" });
 
         // ── Pie institucional ──
+        // Sin esto, pdfkit interpreta que el texto no cabe antes del margen inferior
+        // y lo empuja a una pagina nueva, aunque la posicion Y este dentro de la hoja.
+        doc.page.margins.bottom = 0;
         doc.fontSize(8).fillColor("#666666").text(
             "5 Oriente 070 - Fono (45) 2375125 - Labranza - capitan10.bomberostemuco@gmail.com",
             MARGEN, 730, { width: ANCHO_UTIL, align: "center" }
