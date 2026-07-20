@@ -579,7 +579,11 @@ export default function FichaItem() {
             quedará asignado al bombero recién al confirmar.
           </p>
 
+          <label className="importar-label" htmlFor="input-acta-firmada">
+            {archivoFirmado ? archivoFirmado.name : "Seleccionar archivo (PDF, JPG o PNG)"}
+          </label>
           <input
+            id="input-acta-firmada"
             type="file"
             accept=".pdf,.jpg,.jpeg,.png"
             className="importar-input"
