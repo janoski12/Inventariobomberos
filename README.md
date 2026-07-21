@@ -64,6 +64,10 @@ npm install
 | `JWT_SECRET`   | Clave para firmar los tokens de sesión. **Obligatoria**: el servidor no arranca sin ella. |
 | `FRONTEND_URL` | *(Opcional)* Fuerza el origen de los QR de ubicaciones. Normalmente no hace falta: se usa la URL con la que se accede al sistema. |
 
+> Con Docker estas mismas variables van en el `.env` de la **raíz** del
+> proyecto (junto a `docker-compose.yml`), no en `backend/.env` — ver
+> [Despliegue con Docker](#con-docker-recomendado-para-un-servidor-dedicado).
+
 ## Ejecución
 
 ### Desarrollo
@@ -98,6 +102,37 @@ npm start
 La aplicación completa queda disponible en `http://<ip-del-servidor>:3001` para
 cualquier equipo o teléfono de la red local.
 
+### Con Docker (recomendado para un servidor dedicado)
+
+Requiere Docker Engine con el plugin `docker compose` (ver instalación en Ubuntu/Debian
+más abajo). Todo — frontend compilado, backend y base de datos — corre en un
+solo contenedor:
+
+```bash
+cp .env.example .env    # editar JWT_SECRET (ver variables más abajo)
+docker compose up -d --build
+```
+
+La app queda en `http://<ip-del-servidor>:3001`. La base de datos, los
+respaldos automáticos y los documentos generados (actas, escudo) viven en el
+volumen `inventario_data`, así que sobreviven a `docker compose down` y a
+actualizaciones de la imagen.
+
+```bash
+docker compose logs -f app     # ver logs en vivo
+docker compose ps              # estado / healthcheck
+docker compose restart app     # reiniciar
+docker compose down            # detener (el volumen con los datos NO se borra)
+
+# Actualizar a una versión nueva del código:
+git pull
+docker compose up -d --build
+```
+
+El contenedor arranca solo tras un reinicio del servidor o una caída (política
+`restart: unless-stopped`, y en Linux el propio `dockerd` se registra como
+servicio systemd) — no hace falta configurar nada aparte para eso.
+
 ### Primer acceso
 
 Al arrancar el backend por primera vez (base de datos vacía) se crea un usuario
@@ -129,6 +164,53 @@ temporal aislada (no toca la base real).
 cd backend
 npm test
 ```
+
+## Despliegue en un servidor Ubuntu/Debian con Docker
+
+Pensado para un PC dedicado dentro del cuartel (puede ser un equipo antiguo:
+la app es liviana).
+
+**1. Instalar Docker Engine** (no hace falta Docker Desktop, eso es para
+escritorio; en un servidor Linux basta el motor):
+
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+# cerrar sesión y volver a entrar para que el grupo tome efecto
+```
+
+**2. Copiar el proyecto al servidor** (con `git clone` si tiene acceso a
+internet/red, o transfiriendo la carpeta por USB/`scp`).
+
+**3. Configurar y levantar**:
+
+```bash
+cd Inventariobomberos
+cp .env.example .env
+nano .env               # define un JWT_SECRET real (ver abajo)
+docker compose up -d --build
+```
+
+**4. IP fija**: asigna una IP fija al servidor (reserva DHCP en el router es
+lo más simple) para que la URL no cambie — importante porque los QR de
+ubicaciones y carros codifican esa IP.
+
+**5. Firewall**: si usas `ufw`, abre el puerto:
+
+```bash
+sudo ufw allow 3001/tcp
+```
+
+**6. Verificar desde otro equipo de la red**: `http://<ip-del-servidor>:3001`
+desde un teléfono o PC en la misma red — debería cargar el login.
+
+### Generar un JWT_SECRET real
+
+```bash
+openssl rand -hex 32
+```
+
+Pega el resultado como `JWT_SECRET` en `.env` antes del primer `docker compose up`.
 
 ## Uso de códigos QR en la red local
 
@@ -224,6 +306,10 @@ frontend/
     ├── context/       AuthContext y DialogContext
     ├── auth/          Manejo de token e interceptor de fetch
     └── api/           Cliente HTTP por módulo
+
+Dockerfile            Build multi-etapa (frontend -> deps del backend -> runtime)
+docker-compose.yml    Orquesta el contenedor + volumen persistente
+.env.example           Plantilla de variables para docker compose (JWT_SECRET, ...)
 ```
 
 ## Stack
@@ -231,3 +317,5 @@ frontend/
 - **Backend**: Node.js, Express 5, better-sqlite3, JWT (jsonwebtoken), bcryptjs,
   multer + xlsx (Excel), qrcode, pdfkit (actas de entrega).
 - **Frontend**: React 19, Vite 7, React Router 7.
+- **Despliegue**: Docker (imagen multi-etapa, `docker compose` con volumen
+  persistente y healthcheck).

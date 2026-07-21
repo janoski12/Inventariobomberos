@@ -1,0 +1,12 @@
+**/node_modules
+**/.git
+.git
+backend/data
+backend/test
+frontend/dist
+frontend/node_modules
+*.md
+.env
+.env.local
+.DS_Store
+Thumbs.db
