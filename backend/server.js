@@ -2,10 +2,15 @@ require("dotenv").config();
 const fs      = require("fs");
 const path    = require("path");
 const express = require("express");
+const morgan  = require("morgan");
 const { requireAuth, requireAdmin } = require("./lib/auth");
 
 const app = express();
 app.use(express.json());
+
+// Log de peticiones a la API en vivo (por consola / "docker compose logs -f").
+// No incluye los archivos estaticos del frontend, solo las consultas reales.
+app.use("/api", morgan("dev"));
 
 // ── API publica ──
 app.get("/api/health", (req, res) => res.json({ ok: true }));
