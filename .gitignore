@@ -1,6 +1,10 @@
 # Dependencias
 node_modules/
 
+# Herramientas de prueba locales (Playwright para verificacion manual, no es parte de la app)
+/package.json
+/package-lock.json
+
 # Base de datos (datos locales, no versionar)
 backend/data/*.db
 backend/data/*.db-journal
