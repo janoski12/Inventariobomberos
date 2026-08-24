@@ -1,28 +1,32 @@
 // Genera plantilla_importacion.xlsx en la misma carpeta
 // Uso: node scripts/generar_plantilla.js
+//
+// Debe reflejar exactamente las mismas columnas que GET /api/plantilla
+// (routes/importar.js) — si se agrega una columna ahí, agregarla aquí también.
 
 const path = require("path");
 const xlsx = require("xlsx");
 
 const bomberos = [
-    { nombre: "Juan Pérez",    cargo: "Teniente",   estado: "ACTIVO",   observaciones: "" },
-    { nombre: "María González", cargo: "Voluntario", estado: "ACTIVO",   observaciones: "" },
-    { nombre: "Carlos Rojas",  cargo: "Capitán",    estado: "INACTIVO", observaciones: "Licencia médica" },
+    { nombre: "Juan Pérez",     cargo: "Teniente",   estado: "ACTIVO",   observaciones: "",                rut: "12345678-9", numero_registro: "101" },
+    { nombre: "María González", cargo: "Voluntario", estado: "ACTIVO",   observaciones: "",                rut: "",           numero_registro: "" },
+    { nombre: "Carlos Rojas",   cargo: "Capitán",    estado: "INACTIVO", observaciones: "Licencia médica", rut: "9876543-2",  numero_registro: "045" },
 ];
 
+// codigo_qr no va en la plantilla: lo asigna el sistema automaticamente (UBIC-XXXX)
 const ubicaciones = [
-    { nombre: "Bodega Principal", tipo: "BODEGA",    responsable: "Juan Pérez", codigo_qr: "", activo: 1 },
-    { nombre: "Carro 1",         tipo: "CARRO",     responsable: "",           codigo_qr: "", activo: 1 },
-    { nombre: "Sala Trauma",     tipo: "SALA",      responsable: "",           codigo_qr: "", activo: 1 },
-    { nombre: "Casillero A1",    tipo: "CASILLERO", responsable: "",           codigo_qr: "", activo: 1 },
+    { nombre: "Bodega Principal", tipo: "BODEGA",    responsable: "Juan Pérez", activo: 1 },
+    { nombre: "Carro 1",          tipo: "CARRO",     responsable: "",           activo: 1 },
+    { nombre: "Sala Trauma",      tipo: "SALA",      responsable: "",           activo: 1 },
+    { nombre: "Casillero A1",     tipo: "CASILLERO", responsable: "",           activo: 1 },
 ];
 
 const items = [
-    { codigo: "EPP-0001", categoria: "EPP",         subcategoria: "Casco",      descripcion: "Casco Estructural Rojo",  marca: "Bullard",  modelo: "FH2", serie: "SN-001", estado: "OPERATIVO",     criticidad: "ALTA",  ubicacion_nombre: "",           bombero_nombre: "Juan Pérez" },
-    { codigo: "EPP-0002", categoria: "EPP",         subcategoria: "Chaqueta",   descripcion: "Chaqueta de Aproximación", marca: "MSA",     modelo: "",    serie: "",       estado: "OPERATIVO",     criticidad: "ALTA",  ubicacion_nombre: "",           bombero_nombre: "María González" },
-    { codigo: "TRM-0001", categoria: "TRAUMA",      subcategoria: "Botiquín",   descripcion: "Botiquín de Trauma Tipo A", marca: "",        modelo: "",    serie: "",       estado: "OPERATIVO",     criticidad: "ALTA",  ubicacion_nombre: "Sala Trauma", bombero_nombre: "" },
-    { codigo: "HRR-0001", categoria: "HERRAMIENTA", subcategoria: "Corte",      descripcion: "Amoladora Angular 9\"",  marca: "Makita",   modelo: "GA9020", serie: "MK-123", estado: "MANTENCION", criticidad: "MEDIA", ubicacion_nombre: "Bodega Principal", bombero_nombre: "" },
-    { codigo: "COM-0001", categoria: "COMUNICACION", subcategoria: "Radio",     descripcion: "Radio Portátil VHF",     marca: "Motorola", modelo: "DP4400", serie: "MOT-007", estado: "OPERATIVO", criticidad: "ALTA",  ubicacion_nombre: "Carro 1",    bombero_nombre: "" },
+    { codigo: "EPP-0001", categoria: "EPP",          subcategoria: "Casco",    descripcion: "Casco Estructural Rojo",   marca: "Bullard",  modelo: "FH2",    serie: "SN-001",  talla: "",  estado: "OPERATIVO",  criticidad: "ALTA",  ubicacion_nombre: "",                 ubicacion_detalle: "",         bombero_nombre: "Juan Pérez",     fecha_fabricacion: "2022-01-15", fecha_recepcion: "",           fecha_vencimiento: "" },
+    { codigo: "EPP-0002", categoria: "EPP",          subcategoria: "Chaqueta", descripcion: "Chaqueta de Aproximación", marca: "MSA",      modelo: "",       serie: "",         talla: "S", estado: "OPERATIVO",  criticidad: "ALTA",  ubicacion_nombre: "",                 ubicacion_detalle: "",         bombero_nombre: "María González", fecha_fabricacion: "",           fecha_recepcion: "",           fecha_vencimiento: "" },
+    { codigo: "TRM-0001", categoria: "TRAUMA",       subcategoria: "Botiquín", descripcion: "Botiquín de Trauma Tipo A", marca: "",        modelo: "",       serie: "",         talla: "",  estado: "OPERATIVO",  criticidad: "ALTA",  ubicacion_nombre: "Sala Trauma",      ubicacion_detalle: "",         bombero_nombre: "",               fecha_fabricacion: "",           fecha_recepcion: "2025-01-10", fecha_vencimiento: "2027-01-10" },
+    { codigo: "HRR-0001", categoria: "HERRAMIENTA",  subcategoria: "Corte",    descripcion: "Amoladora Angular 9\"",    marca: "Makita",   modelo: "GA9020", serie: "MK-123",   talla: "",  estado: "MANTENCION", criticidad: "MEDIA", ubicacion_nombre: "Bodega Principal", ubicacion_detalle: "",         bombero_nombre: "",               fecha_fabricacion: "",           fecha_recepcion: "",           fecha_vencimiento: "" },
+    { codigo: "COM-0001", categoria: "COMUNICACION", subcategoria: "Radio",    descripcion: "Radio Portátil VHF",       marca: "Motorola", modelo: "DP4400", serie: "MOT-007",  talla: "",  estado: "OPERATIVO",  criticidad: "ALTA",  ubicacion_nombre: "Carro 1",          ubicacion_detalle: "Gaveta 2", bombero_nombre: "",               fecha_fabricacion: "",           fecha_recepcion: "",           fecha_vencimiento: "" },
 ];
 
 const controles = [

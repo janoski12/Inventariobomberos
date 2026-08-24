@@ -1,20 +1,18 @@
 // Uso: node scripts/importar_excel.js "C:\ruta\plantilla_importacion.xlsx"
+//
+// Duplica (para uso por linea de comandos, sin pasar por el servidor) la misma
+// carga completa que POST /api/importar — mismas columnas, mismas reglas.
+// Reutiliza los catalogos y el parseo de fechas de lib/helpers para no volver
+// a desalinearse con el resto de la app.
 
 const path = require("path");
 const fs   = require("fs");
 const xlsx = require("xlsx");
 const Database = require("better-sqlite3");
-
-const TIPOS_CONTROL  = ["INSPECCION", "MANTENCION", "CERTIFICACION", "OTRO"];
-const ESTADOS_ITEM   = ["OPERATIVO", "MANTENCION", "FUERA_SERVICIO", "BAJA"];
-const CRITICIDADES   = ["ALTA", "MEDIA", "BAJA"];
-const TIPOS_UBICACION = ["BODEGA", "SALA", "SALON", "CONTAINER", "CARRO", "CASILLERO", "OTRO"];
-const CATEGORIAS     = ["EPP", "TRAUMA", "HERRAMIENTA", "COMUNICACION", "OTRO"];
-
-function norm(v) {
-    if (v === undefined || v === null) return "";
-    return String(v).trim();
-}
+const {
+    TIPOS_UBICACION, ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, TIPOS_CONTROL,
+    normXlsx: norm, normFechaXlsx,
+} = require("../lib/helpers");
 
 function die(msg) {
     console.error("ERROR:", msg);
@@ -26,7 +24,8 @@ function main() {
     if (!excelPath) die('Falta ruta Excel. Ej: node scripts/importar_excel.js "C:\\plantilla.xlsx"');
     if (!fs.existsSync(excelPath)) die("No existe el archivo: " + excelPath);
 
-    const dbPath = path.join(__dirname, "..", "data", "inventario.db");
+    // DB_PATH permite apuntar a otra base (p.ej. para probar el script sin tocar la de producción)
+    const dbPath = process.env.DB_PATH || path.join(__dirname, "..", "data", "inventario.db");
     if (!fs.existsSync(dbPath)) die("No se encontró la DB en: " + dbPath);
 
     const db = new Database(dbPath);
@@ -71,19 +70,20 @@ function main() {
     }
 
     // ==== Prepared statements ====
+    // codigo_qr no se lee del Excel: lo asigna el sistema despues de insertar (UBIC-XXXX segun el id)
     const insUbicacion = db.prepare(`
-        INSERT INTO ubicacion (nombre, tipo, responsable, codigo_qr, activo)
-        VALUES (?, ?, ?, ?, ?)
-    `);
-
-    const insBombero = db.prepare(`
-        INSERT INTO bombero (nombre, cargo, estado, observaciones)
+        INSERT INTO ubicacion (nombre, tipo, responsable, activo)
         VALUES (?, ?, ?, ?)
     `);
 
+    const insBombero = db.prepare(`
+        INSERT INTO bombero (nombre, cargo, estado, observaciones, rut, numero_registro)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
     const insItem = db.prepare(`
-        INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicacion_actual_id, asignado_bombero_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, talla, estado, criticidad, ubicacion_actual_id, ubicacion_detalle, asignado_bombero_id, fecha_fabricacion, fecha_recepcion, fecha_vencimiento)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const insControl = db.prepare(`
@@ -93,7 +93,7 @@ function main() {
 
     const insMov = db.prepare(`
         INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha)
-        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))
     `);
 
     const trx = db.transaction(() => {
@@ -115,11 +115,13 @@ function main() {
                 ? norm(u.tipo).toUpperCase()
                 : "OTRO";
             const responsable = norm(u.responsable) || null;
-            const codigo_qr   = norm(u.codigo_qr)   || null;
             const activo      = norm(u.activo) === "0" ? 0 : 1;
 
-            insUbicacion.run(nombre, tipo, responsable, codigo_qr, activo);
+            insUbicacion.run(nombre, tipo, responsable, activo);
         }
+
+        // codigo_qr gestionado por el sistema: UBIC-XXXX segun el id
+        db.prepare("UPDATE ubicacion SET codigo_qr = 'UBIC-' || printf('%04d', id)").run();
 
         const ubicMap = new Map();
         for (const r of db.prepare("SELECT id, nombre FROM ubicacion").all())
@@ -131,11 +133,13 @@ function main() {
             const nombre = norm(b.nombre);
             if (!nombre) continue;
 
-            const cargo        = norm(b.cargo)        || null;
-            const estado       = norm(b.estado).toUpperCase() || "ACTIVO";
-            const observaciones = norm(b.observaciones) || null;
+            const cargo          = norm(b.cargo)           || null;
+            const estado         = norm(b.estado).toUpperCase() || "ACTIVO";
+            const observaciones  = norm(b.observaciones)   || null;
+            const rut            = norm(b.rut)              || null;
+            const numeroRegistro = norm(b.numero_registro) || null;
 
-            insBombero.run(nombre, cargo, estado, observaciones);
+            insBombero.run(nombre, cargo, estado, observaciones, rut, numeroRegistro);
         }
 
         const bomMap = new Map();
@@ -155,13 +159,15 @@ function main() {
             const marca        = norm(it.marca)         || null;
             const modelo       = norm(it.modelo)        || null;
             const serie        = norm(it.serie)         || null;
+            const talla        = norm(it.talla)         || null;
             const estado       = ESTADOS_ITEM.includes(norm(it.estado).toUpperCase())
                 ? norm(it.estado).toUpperCase() : "OPERATIVO";
             const criticidad   = CRITICIDADES.includes(norm(it.criticidad).toUpperCase())
                 ? norm(it.criticidad).toUpperCase() : "MEDIA";
 
-            const ubicNombre = norm(it.ubicacion_nombre);
-            const bomNombre  = norm(it.bombero_nombre);
+            const ubicNombre       = norm(it.ubicacion_nombre);
+            const bomNombre        = norm(it.bombero_nombre);
+            const ubicacionDetalle = norm(it.ubicacion_detalle) || null;
 
             if (ubicNombre && bomNombre)
                 die(`Item "${codigo}": no puede tener ubicación y bombero al mismo tiempo`);
@@ -169,7 +175,11 @@ function main() {
             const ubicId = ubicNombre ? ubicMap.get(ubicNombre) ?? die(`Item "${codigo}": ubicación no encontrada "${ubicNombre}"`) : null;
             const bomId  = bomNombre  ? bomMap.get(bomNombre)   ?? die(`Item "${codigo}": bombero no encontrado "${bomNombre}"`)   : null;
 
-            insItem.run(codigo, categoria, subcategoria, descripcion, marca, modelo, serie, estado, criticidad, ubicId, bomId);
+            const fechaFab  = normFechaXlsx(it.fecha_fabricacion);
+            const fechaRec  = normFechaXlsx(it.fecha_recepcion);
+            const fechaVenc = normFechaXlsx(it.fecha_vencimiento);
+
+            insItem.run(codigo, categoria, subcategoria, descripcion, marca, modelo, serie, talla, estado, criticidad, ubicId, ubicacionDetalle, bomId, fechaFab, fechaRec, fechaVenc);
         }
 
         const itemMap = new Map();

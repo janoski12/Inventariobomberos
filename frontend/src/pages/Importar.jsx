@@ -151,12 +151,13 @@ export default function Importar() {
           titulo="Bomberos"
           descripcion="Upsert por nombre. Estados válidos: ACTIVO, INACTIVO."
           seccion="bomberos"
+          nota="RUT y N° de registro son opcionales, pero deben ser únicos si se indican."
         />
         <SeccionParcial
           titulo="Ítems"
           descripcion="Upsert por código. Incluye fechas (fabricación, recepción, vencimiento) y hoja Controles (opcional, siempre aditiva)."
           seccion="items"
-          nota="Los bomberos y ubicaciones referenciados deben existir en el sistema antes de importar. Las fechas aceptan formato AAAA-MM-DD o DD/MM/AAAA; si vienen vacías no borran las existentes. Si ubicación y bombero vienen vacíos, el ítem conserva su asignación actual."
+          nota="Los bomberos y ubicaciones referenciados deben existir en el sistema antes de importar. Las fechas aceptan formato AAAA-MM-DD o DD/MM/AAAA; si vienen vacías no borran las existentes. Si ubicación y bombero vienen vacíos, el ítem conserva su asignación actual. ubicacion_detalle (gaveta/compartimiento dentro de un carro) también se conserva si viene vacío."
         />
       </div>
     </div>
