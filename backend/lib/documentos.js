@@ -148,4 +148,11 @@ function generarActaEntrega(id, { bombero, items, solicitadoPor, fecha, observac
     });
 }
 
-module.exports = { generarActaEntrega, rutaActaSinFirmar, DOCS_DIR, ESCUDO_PATH };
+// Borra un archivo de documento si existe; limpieza best-effort, nunca lanza
+// (el archivo puede ya no estar, o la ruta puede venir vacia/null).
+function borrarSiExiste(ruta) {
+    if (!ruta) return;
+    try { fs.unlinkSync(ruta); } catch { /* no existe o no se pudo borrar: no es fatal */ }
+}
+
+module.exports = { generarActaEntrega, rutaActaSinFirmar, DOCS_DIR, ESCUDO_PATH, borrarSiExiste };

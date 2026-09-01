@@ -12,6 +12,7 @@ process.env.JWT_SECRET = "test-secret";
 const request = require("supertest");
 const app = require("../server");
 const db = require("../db");
+const { fechaLocalISO: fechaISO } = require("../lib/helpers");
 
 let adminToken;
 let operadorToken;
@@ -554,5 +555,183 @@ describe("Módulo Carros y revisión pública", () => {
     test("eliminar el carro con historial de revisiones (sin items) no falla por FK", async () => {
         const del = await request(app).delete(`/api/ubicaciones/${carroId}`).set(auth(adminToken));
         assert.equal(del.status, 200);
+    });
+});
+
+describe("Limpieza de PDFs huérfanos al eliminar item/bombero", () => {
+    test("borrar el único item de un acta borra tambien el acta y su PDF del disco", async () => {
+        const bom = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero PDF 1" });
+        const item = await request(app).post("/api/items").set(auth(adminToken)).send({ codigo: "PDF-0001", categoria: "EPP", descripcion: "Item pdf 1" });
+        const acta = await request(app).post("/api/actas-entrega").set(auth(adminToken)).send({ bombero_id: bom.body.id, item_ids: [item.body.id] });
+
+        const ruta = db.prepare("SELECT documento_path FROM acta_entrega WHERE id=?").get(acta.body.id).documento_path;
+        assert.ok(fs.existsSync(ruta), "el PDF sin firmar debe existir tras crear la solicitud");
+
+        await request(app).delete(`/api/items/${item.body.id}`).set(auth(adminToken));
+
+        assert.ok(!fs.existsSync(ruta), "el PDF debe borrarse del disco al quedar el acta sin items");
+        assert.equal(db.prepare("SELECT id FROM acta_entrega WHERE id=?").get(acta.body.id), undefined, "el acta huérfana también se borra de la BD");
+    });
+
+    test("kit con 2 items: borrar solo uno conserva el acta y su PDF (el otro item lo sigue necesitando)", async () => {
+        const bom = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero PDF 2" });
+        const itemA = await request(app).post("/api/items").set(auth(adminToken)).send({ codigo: "PDF-0002", categoria: "EPP", descripcion: "Item pdf A" });
+        const itemB = await request(app).post("/api/items").set(auth(adminToken)).send({ codigo: "PDF-0003", categoria: "EPP", descripcion: "Item pdf B" });
+        const acta = await request(app).post("/api/actas-entrega").set(auth(adminToken)).send({ bombero_id: bom.body.id, item_ids: [itemA.body.id, itemB.body.id] });
+        const ruta = db.prepare("SELECT documento_path FROM acta_entrega WHERE id=?").get(acta.body.id).documento_path;
+
+        await request(app).delete(`/api/items/${itemA.body.id}`).set(auth(adminToken));
+
+        assert.ok(fs.existsSync(ruta), "el PDF del kit debe conservarse: itemB todavia lo referencia");
+        assert.ok(db.prepare("SELECT id FROM acta_entrega WHERE id=?").get(acta.body.id), "el acta debe seguir existiendo");
+    });
+
+    test("eliminar un bombero borra los PDFs (sin firmar y firmado) de todas sus actas", async () => {
+        const bom = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero PDF 3" });
+        const item = await request(app).post("/api/items").set(auth(adminToken)).send({ codigo: "PDF-0004", categoria: "EPP", descripcion: "Item pdf 3" });
+        const acta = await request(app).post("/api/actas-entrega").set(auth(adminToken)).send({ bombero_id: bom.body.id, item_ids: [item.body.id] });
+        await request(app).post(`/api/actas-entrega/${acta.body.id}/confirmar`).set(auth(adminToken)).attach("archivo", Buffer.from("firma"), "firma.jpg");
+
+        const rutas = db.prepare("SELECT documento_path, documento_firmado_path FROM acta_entrega WHERE id=?").get(acta.body.id);
+        assert.ok(fs.existsSync(rutas.documento_path) && fs.existsSync(rutas.documento_firmado_path));
+
+        // Hay que soltar la asignación antes de poder borrar al bombero (bloqueado si tiene items asignados)
+        const bodega = await request(app).post("/api/ubicaciones").set(auth(adminToken)).send({ nombre: "Bodega PDF", tipo: "BODEGA" });
+        await request(app).post(`/api/items/${item.body.id}/mover`).set(auth(adminToken)).send({ ubicacion_id: bodega.body.id });
+
+        await request(app).delete(`/api/bomberos/${bom.body.id}`).set(auth(adminToken));
+
+        assert.ok(!fs.existsSync(rutas.documento_path) && !fs.existsSync(rutas.documento_firmado_path), "ambos PDFs deben borrarse del disco");
+    });
+});
+
+describe("Controles de mantenimiento/inspección", () => {
+    let itemId, controlId;
+
+    test("crear un control requiere tipo y fecha_objetivo válidos", async () => {
+        const item = await request(app).post("/api/items").set(auth(adminToken)).send({ codigo: "CTL-0001", categoria: "HERRAMIENTA", descripcion: "Item con control" });
+        itemId = item.body.id;
+
+        const sinTipo = await request(app).post(`/api/items/${itemId}/controles`).set(auth(adminToken)).send({ fecha_objetivo: "2026-01-01" });
+        assert.equal(sinTipo.status, 400);
+
+        const tipoInvalido = await request(app).post(`/api/items/${itemId}/controles`).set(auth(adminToken)).send({ tipo: "NO_EXISTE", fecha_objetivo: "2026-01-01" });
+        assert.equal(tipoInvalido.status, 400);
+
+        const fechaInvalida = await request(app).post(`/api/items/${itemId}/controles`).set(auth(adminToken)).send({ tipo: "MANTENCION", fecha_objetivo: "no-es-fecha" });
+        assert.equal(fechaInvalida.status, 400);
+
+        const ok = await request(app).post(`/api/items/${itemId}/controles`).set(auth(adminToken)).send({ tipo: "MANTENCION", fecha_objetivo: "2026-01-01", observacion: "Revisión anual" });
+        assert.equal(ok.status, 201);
+        controlId = ok.body.id;
+    });
+
+    test("GET /items/:id/controles lista el control recién creado", async () => {
+        const res = await request(app).get(`/api/items/${itemId}/controles`).set(auth(adminToken));
+        assert.equal(res.status, 200);
+        assert.ok(res.body.some((c) => c.id === controlId && c.tipo === "MANTENCION"));
+    });
+
+    test("completar un control valida resultado y fecha_real", async () => {
+        const sinResultado = await request(app).put(`/api/controles/${controlId}`).set(auth(adminToken)).send({ fecha_real: "2026-01-02" });
+        assert.equal(sinResultado.status, 400);
+
+        const resultadoInvalido = await request(app).put(`/api/controles/${controlId}`).set(auth(adminToken)).send({ fecha_real: "2026-01-02", resultado: "NO_EXISTE" });
+        assert.equal(resultadoInvalido.status, 400);
+
+        const ok = await request(app).put(`/api/controles/${controlId}`).set(auth(adminToken)).send({ fecha_real: "2026-01-02", resultado: "APROBADO" });
+        assert.equal(ok.status, 200);
+
+        const lista = await request(app).get(`/api/items/${itemId}/controles`).set(auth(adminToken));
+        const completado = lista.body.find((c) => c.id === controlId);
+        assert.equal(completado.resultado, "APROBADO");
+        assert.equal(completado.fecha_real, "2026-01-02");
+    });
+
+    test("control sobre item inexistente → 404", async () => {
+        const res = await request(app).post("/api/items/999999/controles").set(auth(adminToken)).send({ tipo: "INSPECCION", fecha_objetivo: "2026-01-01" });
+        assert.equal(res.status, 404);
+    });
+});
+
+describe("Reportes", () => {
+    test("GET /reportes agrega estado/categoría/criticidad e incluye controles vencidos y próximos a vencer", async () => {
+        const hoy = fechaISO(0);
+        const ayer = fechaISO(-1);
+        const en10dias = fechaISO(10);
+
+        const sinUbicar = await request(app).post("/api/items").set(auth(adminToken)).send({ codigo: "RPT-0001", categoria: "OTRO", descripcion: "Item sin ubicar para reportes" });
+
+        const conControlVencido = await request(app).post("/api/items").set(auth(adminToken)).send({ codigo: "RPT-0002", categoria: "OTRO", descripcion: "Item con control vencido" });
+        const ctrlVencido = await request(app).post(`/api/items/${conControlVencido.body.id}/controles`).set(auth(adminToken)).send({ tipo: "INSPECCION", fecha_objetivo: ayer });
+
+        const conControlProximo = await request(app).post("/api/items").set(auth(adminToken)).send({ codigo: "RPT-0003", categoria: "OTRO", descripcion: "Item con control próximo" });
+        const ctrlProximo = await request(app).post(`/api/items/${conControlProximo.body.id}/controles`).set(auth(adminToken)).send({ tipo: "INSPECCION", fecha_objetivo: en10dias });
+
+        const res = await request(app).get("/api/reportes").set(auth(adminToken));
+        assert.equal(res.status, 200);
+
+        assert.ok(res.body.porEstado.some((r) => r.estado === "OPERATIVO" && r.total > 0));
+        assert.ok(res.body.porCategoria.some((r) => r.categoria === "OTRO" && r.total > 0));
+        assert.ok(res.body.sinUbicar.some((i) => i.id === sinUbicar.body.id), "el item recién creado sin ubicar/asignar debe aparecer");
+        assert.ok(res.body.controlesVencidos.some((c) => c.id === ctrlVencido.body.id), "el control con fecha_objetivo en el pasado debe aparecer como vencido");
+        assert.ok(res.body.proximosControles.some((c) => c.id === ctrlProximo.body.id), "el control con fecha_objetivo dentro de 30 días debe aparecer como próximo");
+        assert.ok(!res.body.controlesVencidos.some((c) => c.id === ctrlProximo.body.id), "un control aún no vencido no debe aparecer en vencidos");
+    });
+});
+
+describe("Material Trauma", () => {
+    let itemId;
+
+    test("PUT /trauma/:id/fechas valida y fija fecha de recepción/vencimiento", async () => {
+        const item = await request(app).post("/api/items").set(auth(adminToken)).send({ codigo: "TRM-0100", categoria: "TRAUMA", descripcion: "Botiquín test" });
+        itemId = item.body.id;
+
+        const noTrauma = await request(app).post("/api/items").set(auth(adminToken)).send({ codigo: "TRM-0101-NOTRAUMA", categoria: "OTRO", descripcion: "No es trauma" });
+        const sobreNoTrauma = await request(app).put(`/api/trauma/${noTrauma.body.id}/fechas`).set(auth(adminToken)).send({ fecha_recepcion: "2026-01-01" });
+        assert.equal(sobreNoTrauma.status, 400);
+
+        const vencAntesDeRecepcion = await request(app).put(`/api/trauma/${itemId}/fechas`).set(auth(adminToken))
+            .send({ fecha_recepcion: "2026-06-01", fecha_vencimiento: "2026-01-01" });
+        assert.equal(vencAntesDeRecepcion.status, 400);
+
+        const ok = await request(app).put(`/api/trauma/${itemId}/fechas`).set(auth(adminToken))
+            .send({ fecha_recepcion: "2026-01-01", fecha_vencimiento: "2027-01-01" });
+        assert.equal(ok.status, 200);
+
+        const lista = await request(app).get("/api/trauma").set(auth(adminToken));
+        const fila = lista.body.find((i) => i.id === itemId);
+        assert.equal(fila.fecha_recepcion, "2026-01-01");
+        assert.equal(fila.fecha_vencimiento, "2027-01-01");
+    });
+
+    let usoId;
+    test("registrar y listar un uso de material trauma", async () => {
+        const sinCantidad = await request(app).post(`/api/trauma/${itemId}/usos`).set(auth(adminToken)).send({ motivo: "Práctica" });
+        assert.equal(sinCantidad.status, 201, "cantidad es opcional, debe usar el default 1");
+        usoId = sinCantidad.body.id;
+
+        const lista = await request(app).get(`/api/trauma/${itemId}/usos`).set(auth(adminToken));
+        const uso = lista.body.find((u) => u.id === usoId);
+        assert.equal(uso.cantidad, 1);
+        assert.equal(uso.motivo, "Práctica");
+
+        const usoSobreItemNoTrauma = await request(app).post("/api/items").set(auth(adminToken)).send({ codigo: "TRM-0102-X", categoria: "OTRO", descripcion: "x" })
+            .then((it) => request(app).post(`/api/trauma/${it.body.id}/usos`).set(auth(adminToken)).send({}));
+        assert.equal(usoSobreItemNoTrauma.status, 400);
+    });
+
+    test("eliminar un registro de uso", async () => {
+        const del = await request(app).delete(`/api/trauma/usos/${usoId}`).set(auth(adminToken));
+        assert.equal(del.status, 200);
+
+        const lista = await request(app).get(`/api/trauma/${itemId}/usos`).set(auth(adminToken));
+        assert.ok(!lista.body.some((u) => u.id === usoId));
+    });
+
+    test("GET /trauma/exportar responde un archivo Excel", async () => {
+        const res = await request(app).get("/api/trauma/exportar").set(auth(adminToken));
+        assert.equal(res.status, 200);
+        assert.match(res.headers["content-type"], /spreadsheetml/);
     });
 });

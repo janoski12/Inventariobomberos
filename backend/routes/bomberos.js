@@ -1,6 +1,7 @@
 const router = require("express").Router();
 const db = require("../db");
 const { ESTADOS_BOMBERO, cleanText, badRequest, notFound, conflict, serverError } = require("../lib/helpers");
+const { borrarSiExiste } = require("../lib/documentos");
 
 //Crear bombero
 router.post("/bomberos", (req, res) => {
@@ -110,7 +111,14 @@ router.delete("/bomberos/:id", (req, res) => {
         }
 
         db.transaction(() => {
-            // Actas de entrega (historicas o pendientes) que referencian a este bombero
+            // Actas de entrega (historicas o pendientes) que referencian a este bombero:
+            // cada acta pertenece a un solo bombero, asi que se borran completas junto a sus PDFs.
+            const actas = db.prepare("SELECT documento_path, documento_firmado_path FROM acta_entrega WHERE bombero_id=?").all(id);
+            for (const a of actas) {
+                borrarSiExiste(a.documento_path);
+                borrarSiExiste(a.documento_firmado_path);
+            }
+
             db.prepare("DELETE FROM acta_entrega_item WHERE acta_id IN (SELECT id FROM acta_entrega WHERE bombero_id=?)").run(id);
             db.prepare("DELETE FROM acta_entrega WHERE bombero_id=?").run(id);
             db.prepare("DELETE FROM bombero WHERE id=?").run(id);

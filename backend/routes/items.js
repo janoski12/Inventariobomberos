@@ -3,6 +3,7 @@ const db = require("../db");
 const { ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, isNil, cleanText, badRequest, notFound, conflict, serverError, esFechaValida, fechaLocalISO } = require("../lib/helpers");
 const { quienRegistra } = require("../lib/auth");
 const { itemsDeActa } = require("./actas");
+const { borrarSiExiste } = require("../lib/documentos");
 
 //Crear items
 router.post("/items", (req, res) => {
@@ -424,12 +425,30 @@ router.delete("/items/:id", (req, res) => {
         if (!item) return notFound(res, "Item no encontrado");
 
         db.transaction(() => {
+            // Actas (kits) que incluian este item: si tras quitarlo quedan sin
+            // ningun item, ya no representan nada -> se borran junto a sus PDFs.
+            // Si el acta sigue teniendo otros items (kit multi-item), se conserva.
+            const actaIds = db.prepare("SELECT DISTINCT acta_id FROM acta_entrega_item WHERE item_id=?").all(id).map((r) => r.acta_id);
+
             db.prepare("DELETE FROM uso_trauma WHERE item_id=?").run(id);
             db.prepare("DELETE FROM control   WHERE item_id=?").run(id);
             db.prepare("DELETE FROM acta_entrega_item WHERE item_id=?").run(id);
             db.prepare("DELETE FROM revision_carro_item WHERE item_id=?").run(id);
             db.prepare("DELETE FROM movimiento WHERE item_id=?").run(id);
             db.prepare("DELETE FROM item       WHERE id=?").run(id);
+
+            const quedan = db.prepare("SELECT COUNT(*) AS n FROM acta_entrega_item WHERE acta_id=?");
+            const getActa = db.prepare("SELECT documento_path, documento_firmado_path FROM acta_entrega WHERE id=?");
+            const delActa = db.prepare("DELETE FROM acta_entrega WHERE id=?");
+            for (const actaId of actaIds) {
+                if (quedan.get(actaId).n > 0) continue;
+                const acta = getActa.get(actaId);
+                if (acta) {
+                    borrarSiExiste(acta.documento_path);
+                    borrarSiExiste(acta.documento_firmado_path);
+                }
+                delActa.run(actaId);
+            }
         })();
 
         res.json({ ok: true });
