@@ -19,6 +19,9 @@ RUN npm ci --omit=dev
 # ── Etapa 3: imagen final, liviana, sin herramientas de compilacion ──
 FROM node:24-slim AS runtime
 ENV NODE_ENV=production
+# Sin esto el contenedor corre en UTC: datetime('now','localtime') de SQLite y
+# fechaLocalISO() quedarian ~3-4h adelantados respecto a la hora real de Chile.
+ENV TZ=America/Santiago
 WORKDIR /app/backend
 
 COPY backend/ ./

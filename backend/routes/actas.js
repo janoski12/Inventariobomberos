@@ -147,7 +147,7 @@ router.post("/actas-entrega/:id/confirmar", upload.single("archivo"), (req, res)
                         : "Sin asignación";
 
                 db.prepare(`
-                    UPDATE item SET asignado_bombero_id=?, ubicacion_actual_id=NULL, actualizado_en=datetime('now','localtime')
+                    UPDATE item SET asignado_bombero_id=?, ubicacion_actual_id=NULL, ubicacion_detalle=NULL, actualizado_en=datetime('now','localtime')
                     WHERE id=?
                 `).run(acta.bombero_id, itemId);
 
