@@ -20,6 +20,7 @@ router.post("/items", (req, res) => {
         const fecha_fabricacion = cleanText(req.body.fecha_fabricacion);
 
         const ubicacion_actual_id = isNil(req.body.ubicacion_actual_id) ? null : Number(req.body.ubicacion_actual_id);
+        const ubicacion_detalle   = cleanText(req.body.ubicacion_detalle);
 
         if (!codigo) return badRequest(res, "codigo es requerido");
         if (!categoria) return badRequest(res, "categoria es requerida");
@@ -41,6 +42,9 @@ router.post("/items", (req, res) => {
         if (!isNil(req.body.ubicacion_actual_id) && (!Number.isInteger(ubicacion_actual_id) || ubicacion_actual_id <= 0)) {
             return badRequest(res, "ubicacion_actual_id inválido");
         }
+        if (ubicacion_detalle && !ubicacion_actual_id) {
+            return badRequest(res, "ubicacion_detalle requiere indicar tambien ubicacion_actual_id");
+        }
         // La asignación a bombero, incluso al crear el item, exige acta de entrega
         // firmada: ver POST /actas-entrega. Este endpoint solo permite ubicar.
         if (!isNil(req.body.asignado_bombero_id)) {
@@ -56,9 +60,9 @@ router.post("/items", (req, res) => {
 
         const nuevoId = db.transaction(() => {
             const info = db.prepare(`
-                INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, talla, estado, criticidad, ubicacion_actual_id, fecha_fabricacion)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(codigo, categoria, subcategoria, descripcion, marca, modelo, serie, talla, estado, criticidad, ubicacion_actual_id, fecha_fabricacion ?? null);
+                INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, talla, estado, criticidad, ubicacion_actual_id, ubicacion_detalle, fecha_fabricacion)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(codigo, categoria, subcategoria, descripcion, marca, modelo, serie, talla, estado, criticidad, ubicacion_actual_id, ubicacion_detalle, fecha_fabricacion ?? null);
 
             const itemId = info.lastInsertRowid;
             const hacia = ubicacion ? `Ubicado en ${ubicacion.nombre}` : "Sin asignar";

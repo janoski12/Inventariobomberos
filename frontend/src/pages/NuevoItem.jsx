@@ -34,6 +34,7 @@ export default function NuevoItem() {
     modo: "ASIGNAR",
     bombero_id: "",
     ubicacion_id: "",
+    ubicacion_detalle: "",
   });
 
   useEffect(() => {
@@ -57,6 +58,9 @@ export default function NuevoItem() {
   useEffect(() => {
     obtenerModelos(form.marca).catch(() => []).then(setOptsModelo);
   }, [form.marca]);
+
+  const ubicacionSeleccionada = ubicaciones.find((u) => String(u.id) === String(form.ubicacion_id));
+  const esCarro = ubicacionSeleccionada?.tipo === "CARRO";
 
   const puedeGuardar =
     form.codigo.trim() &&
@@ -247,23 +251,39 @@ export default function NuevoItem() {
               </p>
             </label>
           ) : (
-            <label className="label">
-              Ubicacion
-              <select
-                className="input"
-                value={form.ubicacion_id}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, ubicacion_id: e.target.value }))
-                }
-              >
-                <option value="">-- Selecciona --</option>
-                {ubicaciones.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.nombre} {u.tipo ? `(${u.tipo})` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <>
+              <label className="label">
+                Ubicacion
+                <select
+                  className="input"
+                  value={form.ubicacion_id}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, ubicacion_id: e.target.value, ubicacion_detalle: "" }))
+                  }
+                >
+                  <option value="">-- Selecciona --</option>
+                  {ubicaciones.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.nombre} {u.tipo ? `(${u.tipo})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {esCarro && (
+                <label className="label">
+                  Gaveta / compartimiento (opcional)
+                  <input
+                    className="input"
+                    value={form.ubicacion_detalle}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, ubicacion_detalle: e.target.value }))
+                    }
+                    placeholder="Ej: Gaveta 3, compartimiento lateral"
+                  />
+                </label>
+              )}
+            </>
           )}
 
           <div className="row" style={{ justifyContent: "flex-end" }}>
@@ -297,6 +317,8 @@ export default function NuevoItem() {
                   criticidad: form.criticidad,
                   ubicacion_actual_id:
                     form.modo === "UBICAR" ? Number(form.ubicacion_id) : null,
+                  ubicacion_detalle:
+                    form.modo === "UBICAR" && esCarro ? form.ubicacion_detalle.trim() || null : null,
                 };
 
                 const r = await crearItem(payload);

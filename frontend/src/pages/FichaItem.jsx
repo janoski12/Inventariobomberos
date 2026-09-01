@@ -139,6 +139,9 @@ export default function FichaItem() {
     );
   }
 
+  const ubicacionMoverSeleccionada = ubicaciones.find((u) => String(u.id) === String(formMover.ubicacion_id));
+  const moverEsCarro = ubicacionMoverSeleccionada?.tipo === "CARRO";
+
   return (
     <div className="container">
       <Link to="/" style={{ textDecoration: "none" }}>
@@ -526,7 +529,7 @@ export default function FichaItem() {
             <select
               value={formMover.ubicacion_id}
               onChange={(e) =>
-                setFormMover((p) => ({ ...p, ubicacion_id: e.target.value }))
+                setFormMover((p) => ({ ...p, ubicacion_id: e.target.value, ubicacion_detalle: "" }))
               }
               className="input"
             >
@@ -539,17 +542,19 @@ export default function FichaItem() {
             </select>
           </label>
 
-          <label>
-            Gaveta / compartimiento (opcional)
-            <input
-              value={formMover.ubicacion_detalle}
-              onChange={(e) =>
-                setFormMover((p) => ({ ...p, ubicacion_detalle: e.target.value }))
-              }
-              className="input"
-              placeholder="Ej: Gaveta 3, compartimiento lateral"
-            />
-          </label>
+          {moverEsCarro && (
+            <label>
+              Gaveta / compartimiento (opcional)
+              <input
+                value={formMover.ubicacion_detalle}
+                onChange={(e) =>
+                  setFormMover((p) => ({ ...p, ubicacion_detalle: e.target.value }))
+                }
+                className="input"
+                placeholder="Ej: Gaveta 3, compartimiento lateral"
+              />
+            </label>
+          )}
 
           <label>
             Observacion
@@ -575,7 +580,7 @@ export default function FichaItem() {
                   setGuardando(true);
                   await moverItem(id, {
                     ubicacion_id: Number(formMover.ubicacion_id),
-                    ubicacion_detalle: formMover.ubicacion_detalle.trim() || null,
+                    ubicacion_detalle: moverEsCarro ? formMover.ubicacion_detalle.trim() || null : null,
                     observacion: formMover.observacion || null,
                   });
                   await recargarFicha();
