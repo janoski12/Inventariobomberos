@@ -78,13 +78,21 @@ describe("Permisos por rol", () => {
 
     test("admin crea un operador", async () => {
         const res = await request(app).post("/api/usuarios").set(auth(adminToken))
-            .send({ username: "operador_test", password: "oper123", nombre: "Op Test", rol: "OPERADOR" });
+            .send({ username: "operador_test", nombre: "Op Test", rol: "OPERADOR" });
         assert.equal(res.status, 201);
         operadorId = res.body.id;
+        assert.ok(res.body.password_temporal, "debe devolver la contraseña temporal generada");
 
-        const login = await request(app).post("/api/auth/login").send({ username: "operador_test", password: "oper123" });
+        const login = await request(app).post("/api/auth/login")
+            .send({ username: "operador_test", password: res.body.password_temporal });
         operadorToken = login.body.token;
         assert.ok(operadorToken);
+        assert.equal(login.body.usuario.debe_cambiar_password, true);
+
+        // Cambia la contraseña temporal: recien ahi el resto de la API deja de bloquearlo (ver describe de mas abajo)
+        const cambio = await request(app).put("/api/auth/password").set(auth(operadorToken))
+            .send({ actual: res.body.password_temporal, nueva: "oper123456" });
+        assert.equal(cambio.status, 200);
     });
 
     test("operador puede crear (POST) un bombero", async () => {
@@ -258,9 +266,10 @@ describe("Errores controlados", () => {
 
 describe("Cambio de contraseña propio", () => {
     test("flujo completo: crear usuario, cambiar clave y reloguear", async () => {
-        await request(app).post("/api/usuarios").set(auth(adminToken))
-            .send({ username: "cambia_clave", password: "clave1", nombre: "Cambia Clave", rol: "OPERADOR" });
-        const login = await request(app).post("/api/auth/login").send({ username: "cambia_clave", password: "clave1" });
+        const creado = await request(app).post("/api/usuarios").set(auth(adminToken))
+            .send({ username: "cambia_clave", nombre: "Cambia Clave", rol: "OPERADOR" });
+        const clave1 = creado.body.password_temporal;
+        const login = await request(app).post("/api/auth/login").send({ username: "cambia_clave", password: clave1 });
         const token = login.body.token;
 
         const mala = await request(app).put("/api/auth/password").set(auth(token))
@@ -268,10 +277,10 @@ describe("Cambio de contraseña propio", () => {
         assert.equal(mala.status, 401);
 
         const ok = await request(app).put("/api/auth/password").set(auth(token))
-            .send({ actual: "clave1", nueva: "clave2nueva" });
+            .send({ actual: clave1, nueva: "clave2nueva" });
         assert.equal(ok.status, 200);
 
-        const reloginViejo = await request(app).post("/api/auth/login").send({ username: "cambia_clave", password: "clave1" });
+        const reloginViejo = await request(app).post("/api/auth/login").send({ username: "cambia_clave", password: clave1 });
         assert.equal(reloginViejo.status, 401);
         const reloginNuevo = await request(app).post("/api/auth/login").send({ username: "cambia_clave", password: "clave2nueva" });
         assert.equal(reloginNuevo.status, 200);
@@ -733,5 +742,80 @@ describe("Material Trauma", () => {
         const res = await request(app).get("/api/trauma/exportar").set(auth(adminToken));
         assert.equal(res.status, 200);
         assert.match(res.headers["content-type"], /spreadsheetml/);
+    });
+});
+
+describe("Contraseña temporal obligatoria en el primer login", () => {
+    test("crear un usuario devuelve una contraseña temporal, no acepta una propia", async () => {
+        const res = await request(app).post("/api/usuarios").set(auth(adminToken))
+            .send({ username: "temp_pw_1", nombre: "Temp Uno", rol: "OPERADOR", password: "esto-se-ignora" });
+        assert.equal(res.status, 201);
+        assert.ok(res.body.password_temporal && res.body.password_temporal.length >= 8);
+
+        // La contraseña enviada en el body no sirve: solo la temporal generada por el sistema
+        const conClaveEnviada = await request(app).post("/api/auth/login")
+            .send({ username: "temp_pw_1", password: "esto-se-ignora" });
+        assert.equal(conClaveEnviada.status, 401);
+
+        const conClaveTemporal = await request(app).post("/api/auth/login")
+            .send({ username: "temp_pw_1", password: res.body.password_temporal });
+        assert.equal(conClaveTemporal.status, 200);
+        assert.equal(conClaveTemporal.body.usuario.debe_cambiar_password, true);
+    });
+
+    test("con la contraseña pendiente de cambio, el resto de la API queda bloqueada (403)", async () => {
+        const creado = await request(app).post("/api/usuarios").set(auth(adminToken))
+            .send({ username: "temp_pw_2", nombre: "Temp Dos", rol: "OPERADOR" });
+        const login = await request(app).post("/api/auth/login")
+            .send({ username: "temp_pw_2", password: creado.body.password_temporal });
+        const token = login.body.token;
+
+        const bloqueado = await request(app).get("/api/items").set(auth(token));
+        assert.equal(bloqueado.status, 403);
+        assert.equal(bloqueado.body.debe_cambiar_password, true);
+
+        // /auth/me sigue accesible (no queda "encerrado" sin poder ver su propio estado)
+        const me = await request(app).get("/api/auth/me").set(auth(token));
+        assert.equal(me.status, 200);
+        assert.equal(me.body.debe_cambiar_password, true);
+
+        // Tras cambiar la contraseña, el bloqueo se levanta de inmediato (mismo token, sin relogear)
+        await request(app).put("/api/auth/password").set(auth(token))
+            .send({ actual: creado.body.password_temporal, nueva: "nueva-clave-1" });
+
+        const desbloqueado = await request(app).get("/api/items").set(auth(token));
+        assert.equal(desbloqueado.status, 200);
+
+        const meActualizado = await request(app).get("/api/auth/me").set(auth(token));
+        assert.equal(meActualizado.body.debe_cambiar_password, false);
+    });
+
+    test("un usuario sin contraseña pendiente no queda bloqueado (admin, caso normal)", async () => {
+        const res = await request(app).get("/api/items").set(auth(adminToken));
+        assert.equal(res.status, 200);
+    });
+
+    test("si un admin le resetea la clave a otro usuario, vuelve a quedar pendiente de cambio", async () => {
+        const creado = await request(app).post("/api/usuarios").set(auth(adminToken))
+            .send({ username: "temp_pw_3", nombre: "Temp Tres", rol: "OPERADOR" });
+        const login1 = await request(app).post("/api/auth/login")
+            .send({ username: "temp_pw_3", password: creado.body.password_temporal });
+        await request(app).put("/api/auth/password").set(auth(login1.body.token))
+            .send({ actual: creado.body.password_temporal, nueva: "clave-propia-1" });
+
+        // Ya cambio su clave: no deberia estar bloqueado
+        const sinBloqueo = await request(app).get("/api/items").set(auth(login1.body.token));
+        assert.equal(sinBloqueo.status, 200);
+
+        // El admin le resetea la contraseña manualmente
+        await request(app).put(`/api/usuarios/${creado.body.id}`).set(auth(adminToken))
+            .send({ nombre: "Temp Tres", rol: "OPERADOR", activo: 1, password: "clave-reseteada-admin" });
+
+        const login2 = await request(app).post("/api/auth/login")
+            .send({ username: "temp_pw_3", password: "clave-reseteada-admin" });
+        assert.equal(login2.body.usuario.debe_cambiar_password, true, "una clave reseteada por un admin tambien es temporal");
+
+        const bloqueadoDeNuevo = await request(app).get("/api/items").set(auth(login2.body.token));
+        assert.equal(bloqueadoDeNuevo.status, 403);
     });
 });

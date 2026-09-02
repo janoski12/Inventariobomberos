@@ -41,10 +41,18 @@ export function AuthProvider({ children }) {
     return data.usuario;
   }, []);
 
+  // Vuelve a pedir el perfil al backend (fuente de verdad): se usa tras
+  // cambiar la contraseña obligatoria, para que debe_cambiar_password quede
+  // al dia sin tener que cerrar y volver a iniciar sesion.
+  const refrescarPerfil = useCallback(async () => {
+    try { setUsuario(await obtenerPerfil()); }
+    catch { /* si el token ya no es valido, requireAuth lo habria expulsado igual */ }
+  }, []);
+
   const esAdmin = usuario?.rol === "ADMIN";
 
   return (
-    <Ctx.Provider value={{ usuario, cargando, login, logout, esAdmin }}>
+    <Ctx.Provider value={{ usuario, cargando, login, logout, esAdmin, refrescarPerfil }}>
       {children}
     </Ctx.Provider>
   );

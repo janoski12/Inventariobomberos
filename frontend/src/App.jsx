@@ -19,6 +19,7 @@ import Importar from "./pages/Importar";
 import Trauma from "./pages/Trauma";
 import Login from "./pages/Login";
 import Usuarios from "./pages/Usuarios";
+import PasswordObligatoria from "./pages/PasswordObligatoria";
 
 // Ficha autenticada de la app: requiere sesion. Se separa de AppContent para
 // que la ruta publica de revision de carros (sin login) pueda vivir al lado,
@@ -33,6 +34,11 @@ function AppAutenticada() {
 
   if (!usuario) {
     return <Login />;
+  }
+
+  // Contraseña temporal pendiente de cambiar: bloquea toda la app hasta que la cambie
+  if (usuario.debe_cambiar_password) {
+    return <PasswordObligatoria />;
   }
 
   return (

@@ -3,7 +3,7 @@ const fs      = require("fs");
 const path    = require("path");
 const express = require("express");
 const morgan  = require("morgan");
-const { requireAuth, requireAdmin } = require("./lib/auth");
+const { requireAuth, requireAdmin, requirePasswordActualizada } = require("./lib/auth");
 
 const app = express();
 app.use(express.json());
@@ -20,6 +20,8 @@ app.use("/api", require("./routes/carrosPublico"));
 
 // ── A partir de aqui toda la API requiere sesion ──
 app.use("/api", requireAuth);
+// Contraseña temporal (usuario nuevo, o reseteada por un admin) pendiente de cambiar: bloquea todo lo demas
+app.use("/api", requirePasswordActualizada);
 // Las operaciones destructivas (DELETE) requieren rol admin
 app.use("/api", (req, res, next) => (req.method === "DELETE" ? requireAdmin(req, res, next) : next()));
 

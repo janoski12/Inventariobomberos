@@ -5,7 +5,7 @@ import { useDialog } from "../context/DialogContext";
 import Modal from "../components/Modal";
 
 const ROLES = ["ADMIN", "OPERADOR"];
-const FORM_VACIO = { username: "", nombre: "", rol: "OPERADOR", password: "" };
+const FORM_VACIO = { username: "", nombre: "", rol: "OPERADOR" };
 
 export default function Usuarios() {
   const { usuario: actual } = useAuth();
@@ -17,6 +17,8 @@ export default function Usuarios() {
   const [form, setForm]         = useState(FORM_VACIO);
   const [openEdit, setOpenEdit] = useState(false);
   const [edit, setEdit]         = useState(null);
+  // Contraseña temporal recien generada al crear un usuario, para mostrarla una sola vez
+  const [tempInfo, setTempInfo] = useState(null);
 
   async function cargar() {
     setError("");
@@ -28,7 +30,7 @@ export default function Usuarios() {
 
   useEffect(() => { cargar(); }, []);
 
-  const puedeGuardar = form.username.trim() && form.password.length >= 6;
+  const puedeGuardar = form.username.trim();
 
   return (
     <div className="container">
@@ -58,27 +60,25 @@ export default function Usuarios() {
               {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </label>
-          <label className="label">
-            Contraseña
-            <input className="input" type="password" value={form.password}
-              onChange={(e) => setForm(p => ({ ...p, password: e.target.value }))}
-              placeholder="Mínimo 6 caracteres" autoComplete="new-password" />
-          </label>
         </div>
+        <p className="muted" style={{ marginTop: 10 }}>
+          La contraseña la genera el sistema: se muestra una sola vez al crear la cuenta.
+          Se le pedirá cambiarla obligatoriamente en su primer ingreso.
+        </p>
         <div className="row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
           <button className="btn" disabled={!puedeGuardar || guardando}
             onClick={async () => {
+              const username = form.username.trim();
               try {
                 setGuardando(true);
-                await crearUsuario({
-                  username: form.username.trim(),
+                const data = await crearUsuario({
+                  username,
                   nombre: form.nombre.trim() || null,
                   rol: form.rol,
-                  password: form.password,
                 });
                 setForm(FORM_VACIO);
                 await cargar();
-                toast("Usuario creado", "success");
+                setTempInfo({ username, password: data.password_temporal });
               } catch (e) { toast(e.message); }
               finally { setGuardando(false); }
             }}>
@@ -162,6 +162,11 @@ export default function Usuarios() {
                 onChange={(e) => setEdit(p => ({ ...p, password: e.target.value }))}
                 placeholder="Dejar vacío para no cambiar" autoComplete="new-password" />
             </label>
+            {edit.password && (
+              <p className="muted" style={{ marginTop: -6 }}>
+                Se le pedirá cambiarla obligatoriamente en su próximo ingreso.
+              </p>
+            )}
 
             <div className="row" style={{ justifyContent: "flex-end" }}>
               <button className="btn-light" onClick={() => setOpenEdit(false)}>Cancelar</button>
@@ -180,6 +185,33 @@ export default function Usuarios() {
                 }}>
                 Guardar cambios
               </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ── CONTRASEÑA TEMPORAL RECIEN GENERADA (se muestra una sola vez) ── */}
+      <Modal open={!!tempInfo} title="Usuario creado" onClose={() => setTempInfo(null)}>
+        {tempInfo && (
+          <div className="stack">
+            <p className="muted" style={{ margin: 0 }}>
+              Comparte esta contraseña temporal con <strong>{tempInfo.username}</strong>. No se
+              volverá a mostrar. Se le pedirá cambiarla obligatoriamente en su primer ingreso.
+            </p>
+            <div className="inforow">
+              <span className="inforow-label">Contraseña temporal</span>
+              <span className="inforow-value" style={{ fontFamily: "monospace", fontSize: 16, letterSpacing: 1 }}>
+                {tempInfo.password}
+              </span>
+            </div>
+            <div className="row" style={{ justifyContent: "flex-end" }}>
+              <button className="btn-light" type="button" onClick={() => {
+                navigator.clipboard?.writeText(tempInfo.password).catch(() => {});
+                toast("Copiada al portapapeles", "success");
+              }}>
+                Copiar
+              </button>
+              <button className="btn" type="button" onClick={() => setTempInfo(null)}>Listo</button>
             </div>
           </div>
         )}

@@ -53,6 +53,10 @@ try { db.exec("ALTER TABLE item ADD COLUMN talla TEXT"); } catch {}
 // Migracion: ubicacion exacta dentro de un carro (gaveta/compartimiento)
 try { db.exec("ALTER TABLE item ADD COLUMN ubicacion_detalle TEXT"); } catch {}
 
+// Migracion: contraseña temporal obligatoria a cambiar en el primer login
+// (se asigna al crear el usuario, o cuando un admin le resetea la clave)
+try { db.exec("ALTER TABLE usuario ADD COLUMN debe_cambiar_password INTEGER NOT NULL DEFAULT 0"); } catch {}
+
 // La tabla asignacion_pendiente (un item por acta) se reemplazo por acta_entrega +
 // acta_entrega_item (varios items por acta). No hubo datos reales en producción
 // bajo el modelo anterior, asi que se descarta en vez de migrarla.

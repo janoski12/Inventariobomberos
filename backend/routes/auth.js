@@ -19,7 +19,10 @@ router.post("/auth/login", (req, res) => {
         const token = firmarToken(usuario);
         res.json({
             token,
-            usuario: { id: usuario.id, username: usuario.username, nombre: usuario.nombre, rol: usuario.rol },
+            usuario: {
+                id: usuario.id, username: usuario.username, nombre: usuario.nombre, rol: usuario.rol,
+                debe_cambiar_password: !!usuario.debe_cambiar_password,
+            },
         });
     } catch (e) {
         return serverError(res, e, "Error al iniciar sesión");
@@ -28,9 +31,12 @@ router.post("/auth/login", (req, res) => {
 
 // Datos del usuario autenticado (valida que el token siga vivo)
 router.get("/auth/me", requireAuth, (req, res) => {
-    const usuario = db.prepare("SELECT id, username, nombre, rol, activo FROM usuario WHERE id = ?").get(req.usuario.id);
+    const usuario = db.prepare("SELECT id, username, nombre, rol, activo, debe_cambiar_password FROM usuario WHERE id = ?").get(req.usuario.id);
     if (!usuario || !usuario.activo) return res.status(401).json({ error: "Sesión inválida" });
-    res.json({ id: usuario.id, username: usuario.username, nombre: usuario.nombre, rol: usuario.rol });
+    res.json({
+        id: usuario.id, username: usuario.username, nombre: usuario.nombre, rol: usuario.rol,
+        debe_cambiar_password: !!usuario.debe_cambiar_password,
+    });
 });
 
 // Cambiar la propia contraseña
@@ -45,7 +51,7 @@ router.put("/auth/password", requireAuth, (req, res) => {
         if (!usuario || !bcrypt.compareSync(actual, usuario.password_hash))
             return res.status(401).json({ error: "La contraseña actual es incorrecta" });
 
-        db.prepare("UPDATE usuario SET password_hash = ? WHERE id = ?").run(bcrypt.hashSync(nueva, 10), usuario.id);
+        db.prepare("UPDATE usuario SET password_hash = ?, debe_cambiar_password = 0 WHERE id = ?").run(bcrypt.hashSync(nueva, 10), usuario.id);
         res.json({ ok: true });
     } catch (e) {
         return serverError(res, e, "Error al cambiar la contraseña");

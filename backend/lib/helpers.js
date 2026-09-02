@@ -1,4 +1,5 @@
 const multer = require("multer");
+const crypto = require("crypto");
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -12,6 +13,17 @@ const RESULTADOS_CONTROL = ["APROBADO", "RECHAZADO", "PENDIENTE"];
 const ESTADOS_ASIGNACION = ["PENDIENTE", "CONFIRMADA", "CANCELADA"];
 const RESULTADOS_REVISION = ["OK", "FALLA", "FALTANTE"];
 const EXT_DOCUMENTO      = { pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png" };
+
+// Contraseña temporal aleatoria para usuarios nuevos (o al resetear la de
+// otro usuario): 10 caracteres, sin 0/O/1/l/I para que no se preste a
+// confusión al transcribirla a mano o dictarla por teléfono.
+function generarPasswordTemporal(longitud = 10) {
+    const alfabeto = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+    const bytes = crypto.randomBytes(longitud);
+    let out = "";
+    for (let i = 0; i < longitud; i++) out += alfabeto[bytes[i] % alfabeto.length];
+    return out;
+}
 
 function isNil(v) {
     return v === null || v === undefined;
@@ -100,6 +112,6 @@ module.exports = {
     upload,
     ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, ESTADOS_BOMBERO, TIPOS_UBICACION,
     TIPOS_CONTROL, RESULTADOS_CONTROL, ESTADOS_ASIGNACION, RESULTADOS_REVISION,
-    isNil, cleanText, badRequest, notFound, conflict, serverError,
+    isNil, cleanText, badRequest, notFound, conflict, serverError, generarPasswordTemporal,
     normXlsx, normFechaXlsx, parseXlsxBuffer, esFechaValida, fechaLocalISO, parseDocumentoBuffer,
 };

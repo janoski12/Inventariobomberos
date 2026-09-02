@@ -2,7 +2,7 @@ const router = require("express").Router();
 const bcrypt = require("bcryptjs");
 const db = require("../db");
 const { requireAuth, requireAdmin } = require("../lib/auth");
-const { cleanText, badRequest, notFound, conflict, serverError } = require("../lib/helpers");
+const { cleanText, badRequest, notFound, conflict, serverError, generarPasswordTemporal } = require("../lib/helpers");
 
 const ROLES = ["ADMIN", "OPERADOR"];
 
@@ -15,24 +15,24 @@ router.get("/usuarios", (_req, res) => {
     res.json(rows);
 });
 
-// Crear usuario
+// Crear usuario: la contraseña la genera el sistema (temporal) y se debe
+// cambiar obligatoriamente en el primer ingreso (ver requirePasswordActualizada)
 router.post("/usuarios", (req, res) => {
     try {
         const username = cleanText(req.body.username);
         const nombre   = cleanText(req.body.nombre);
         const rol      = (cleanText(req.body.rol) || "OPERADOR").toUpperCase();
-        const password = req.body.password;
 
         if (!username) return badRequest(res, "username es requerido");
-        if (!password || String(password).length < 6) return badRequest(res, "La contraseña debe tener al menos 6 caracteres");
         if (!ROLES.includes(rol)) return badRequest(res, `rol inválido. Use: ${ROLES.join(", ")}`);
 
         if (db.prepare("SELECT id FROM usuario WHERE username = ?").get(username))
             return conflict(res, `Ya existe un usuario "${username}"`);
 
-        const info = db.prepare("INSERT INTO usuario (username, password_hash, nombre, rol) VALUES (?, ?, ?, ?)")
-            .run(username, bcrypt.hashSync(password, 10), nombre ?? null, rol);
-        res.status(201).json({ id: info.lastInsertRowid });
+        const passwordTemporal = generarPasswordTemporal();
+        const info = db.prepare("INSERT INTO usuario (username, password_hash, nombre, rol, debe_cambiar_password) VALUES (?, ?, ?, ?, 1)")
+            .run(username, bcrypt.hashSync(passwordTemporal, 10), nombre ?? null, rol);
+        res.status(201).json({ id: info.lastInsertRowid, password_temporal: passwordTemporal });
     } catch (e) {
         return serverError(res, e, "Error creando usuario");
     }
@@ -62,7 +62,8 @@ router.put("/usuarios/:id", (req, res) => {
 
         if (password !== undefined && password !== null && password !== "") {
             if (String(password).length < 6) return badRequest(res, "La contraseña debe tener al menos 6 caracteres");
-            db.prepare("UPDATE usuario SET password_hash = ? WHERE id = ?").run(bcrypt.hashSync(password, 10), id);
+            // Una clave puesta por un admin tambien es "temporal": se exige cambiarla en el proximo ingreso
+            db.prepare("UPDATE usuario SET password_hash = ?, debe_cambiar_password = 1 WHERE id = ?").run(bcrypt.hashSync(password, 10), id);
         }
 
         db.prepare("UPDATE usuario SET nombre = ?, rol = ?, activo = ? WHERE id = ?")
