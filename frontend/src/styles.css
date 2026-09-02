@@ -175,6 +175,79 @@ h1, h2, h3 { margin: 0; }
 .nav-link:hover       { color: var(--text); border-bottom-color: var(--border); }
 .nav-link--active     { color: var(--text); border-bottom-color: var(--accent); }
 
+/* Boton que abre el menu lateral: solo se ve en celular (ver media query abajo) */
+.nav-hamburger {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    margin: 8px 0;
+    flex-shrink: 0;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius);
+    font-size: 17px;
+    cursor: pointer;
+}
+.nav-hamburger:hover { border-color: var(--accent); }
+
+/* ===== MENU LATERAL (navegacion en celular) ===== */
+.nav-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    z-index: 200;
+}
+.nav-drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(280px, 82vw);
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    box-shadow: 6px 0 28px rgba(0, 0, 0, 0.5);
+    z-index: 201;
+}
+.nav-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.nav-drawer-links {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px;
+    overflow-y: auto;
+}
+.nav-drawer-link {
+    padding: 13px 14px;
+    border-radius: var(--radius);
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 500;
+    border-left: 3px solid transparent;
+}
+.nav-drawer-link:hover   { background: rgba(255,255,255,0.05); color: var(--text); }
+.nav-drawer-link--active { color: var(--text); background: rgba(198,40,40,0.12); border-left-color: var(--accent); }
+
+@media (max-width: 768px) {
+    .navbar .nav-link { display: none; }
+    .nav-hamburger     { display: flex; }
+    /* El titulo completo ya no cabe junto al badge + acciones del usuario: en
+       celular basta con el badge CBT10 para identificar la app. */
+    .app-header-title  { display: none; }
+}
+
 /* ===== LAYOUT ===== */
 .app-content { padding: 24px; }
 .container   { max-width: 900px; margin: 0 auto; }
@@ -286,6 +359,11 @@ h1, h2, h3 { margin: 0; }
 .input:focus, select.input:focus { border-color: #555; }
 .label  { display: grid; gap: 4px; color: var(--text-dim); font-size: 13px; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+/* En telefono se apila a una columna para que etiquetas, valores y textos de
+   ejemplo no queden cortados por el ancho angosto. */
+@media (max-width: 480px) {
+    .grid-2 { grid-template-columns: 1fr; }
+}
 .hr     { margin: 16px 0; border: none; border-top: 1px solid var(--border); }
 
 /* ===== INFOROW ===== */
