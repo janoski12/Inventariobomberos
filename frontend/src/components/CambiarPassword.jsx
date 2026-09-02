@@ -21,6 +21,8 @@ export default function CambiarPassword({ open, onClose }) {
   const puedeGuardar =
     form.actual.length > 0 && form.nueva.length >= 6 && form.repetir.length > 0 && !guardando;
 
+  const campo = (nombre) => (e) => setForm((p) => ({ ...p, [nombre]: e.target.value }));
+
   async function handleGuardar() {
     if (form.nueva !== form.repetir) {
       setError("La nueva contraseña y su repetición no coinciden.");
@@ -48,7 +50,7 @@ export default function CambiarPassword({ open, onClose }) {
             className="input"
             type="password"
             value={form.actual}
-            onChange={(e) => setForm((p) => ({ ...p, actual: e.target.value }))}
+            onChange={campo("actual")}
             autoComplete="current-password"
           />
         </label>
@@ -59,7 +61,7 @@ export default function CambiarPassword({ open, onClose }) {
             className="input"
             type="password"
             value={form.nueva}
-            onChange={(e) => setForm((p) => ({ ...p, nueva: e.target.value }))}
+            onChange={campo("nueva")}
             placeholder="Mínimo 6 caracteres"
             autoComplete="new-password"
           />
@@ -71,14 +73,14 @@ export default function CambiarPassword({ open, onClose }) {
             className="input"
             type="password"
             value={form.repetir}
-            onChange={(e) => setForm((p) => ({ ...p, repetir: e.target.value }))}
+            onChange={campo("repetir")}
             autoComplete="new-password"
           />
         </label>
 
         {error && <p className="error">{error}</p>}
 
-        <div className="row" style={{ justifyContent: "flex-end" }}>
+        <div className="row row--end">
           <button className="btn-light" onClick={cerrar}>Cancelar</button>
           <button className="btn" disabled={!puedeGuardar} onClick={handleGuardar}>
             {guardando ? "Guardando..." : "Guardar"}

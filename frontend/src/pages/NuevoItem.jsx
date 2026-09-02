@@ -68,6 +68,58 @@ export default function NuevoItem() {
     ((form.modo === "ASIGNAR" && form.bombero_id) ||
       (form.modo === "UBICAR" && form.ubicacion_id));
 
+  const campo = (nombre) => (e) => setForm((p) => ({ ...p, [nombre]: e.target.value }));
+
+  async function guardar() {
+    try {
+      setGuardando(true);
+      const payload = {
+        codigo: form.codigo.trim(),
+        categoria: form.categoria,
+        subcategoria: form.subcategoria.trim() || null,
+        descripcion: form.descripcion.trim(),
+        marca: form.marca.trim() || null,
+        modelo: form.modelo.trim() || null,
+        serie: form.serie.trim() || null,
+        talla: form.talla.trim() || null,
+        fecha_fabricacion: form.fecha_fabricacion || null,
+        estado: form.estado,
+        criticidad: form.criticidad,
+        ubicacion_actual_id: form.modo === "UBICAR" ? Number(form.ubicacion_id) : null,
+        ubicacion_detalle:
+          form.modo === "UBICAR" && esCarro ? form.ubicacion_detalle.trim() || null : null,
+      };
+
+      const r = await crearItem(payload);
+
+      // Un item nunca se crea ya asignado: si se eligió bombero, se genera
+      // de inmediato el acta de entrega para ese item nuevo.
+      if (form.modo === "ASIGNAR" && form.bombero_id) {
+        try {
+          const { id: actaId } = await solicitarActaEntrega({
+            bombero_id: Number(form.bombero_id),
+            item_ids: [r.id],
+          });
+          toast("Ítem creado. Imprime el acta, fírmala y súbela para confirmar la entrega.", "success");
+          await abrirDocumento(actaId);
+        } catch (e2) {
+          console.error(e2);
+          toast("El ítem se creó, pero no se pudo generar el acta. Puedes generarla desde su ficha.");
+        }
+      } else {
+        toast("Ítem creado", "success");
+      }
+
+      if (r?.id) navigate(`/items/${r.id}`);
+      else navigate("/");
+    } catch (e) {
+      console.error(e);
+      toast("No se pudo crear ítem (revisa backend / campos).");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
   return (
     <div className="container">
       <h2 style={{ marginTop: 0 }}>Nuevo ítem</h2>
@@ -79,9 +131,7 @@ export default function NuevoItem() {
             <input
               className="input"
               value={form.codigo}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, codigo: e.target.value }))
-              }
+              onChange={campo("codigo")}
               placeholder="Ej: EPP-0001"
             />
           </label>
@@ -91,9 +141,7 @@ export default function NuevoItem() {
             <select
               className="input"
               value={form.categoria}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, categoria: e.target.value }))
-              }
+              onChange={campo("categoria")}
             >
               <option value="EPP">EPP</option>
               <option value="TRAUMA">TRAUMA</option>
@@ -108,9 +156,7 @@ export default function NuevoItem() {
             <input
               className="input"
               value={form.descripcion}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, descripcion: e.target.value }))
-              }
+              onChange={campo("descripcion")}
               placeholder="Ej: Casco Estructural"
             />
           </label>
@@ -130,9 +176,7 @@ export default function NuevoItem() {
             <select
               className="input"
               value={form.estado}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, estado: e.target.value }))
-              }
+              onChange={campo("estado")}
             >
               <option value="OPERATIVO">OPERATIVO</option>
               <option value="MANTENCION">MANTENCION</option>
@@ -146,9 +190,7 @@ export default function NuevoItem() {
             <select
               className="input"
               value={form.criticidad}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, criticidad: e.target.value }))
-              }
+              onChange={campo("criticidad")}
             >
               <option value="ALTA">ALTA</option>
               <option value="MEDIA">MEDIA</option>
@@ -181,7 +223,7 @@ export default function NuevoItem() {
             <input
               className="input"
               value={form.serie}
-              onChange={(e) => setForm((p) => ({ ...p, serie: e.target.value }))}
+              onChange={campo("serie")}
             />
           </label>
 
@@ -190,7 +232,7 @@ export default function NuevoItem() {
             <input
               className="input"
               value={form.talla}
-              onChange={(e) => setForm((p) => ({ ...p, talla: e.target.value }))}
+              onChange={campo("talla")}
               placeholder="Ej: S, M, L, 38, 40"
             />
           </label>
@@ -201,7 +243,7 @@ export default function NuevoItem() {
               type="date"
               className="input"
               value={form.fecha_fabricacion}
-              onChange={(e) => setForm((p) => ({ ...p, fecha_fabricacion: e.target.value }))}
+              onChange={campo("fecha_fabricacion")}
             />
           </label>
         </div>
@@ -234,9 +276,7 @@ export default function NuevoItem() {
               <select
                 className="input"
                 value={form.bombero_id}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, bombero_id: e.target.value }))
-                }
+                onChange={campo("bombero_id")}
               >
                 <option value="">-- Selecciona --</option>
                 {bomberos.map((b) => (
@@ -276,9 +316,7 @@ export default function NuevoItem() {
                   <input
                     className="input"
                     value={form.ubicacion_detalle}
-                    onChange={(e) =>
-                      setForm((p) => ({ ...p, ubicacion_detalle: e.target.value }))
-                    }
+                    onChange={campo("ubicacion_detalle")}
                     placeholder="Ej: Gaveta 3, compartimiento lateral"
                   />
                 </label>
@@ -286,7 +324,7 @@ export default function NuevoItem() {
             </>
           )}
 
-          <div className="row" style={{ justifyContent: "flex-end" }}>
+          <div className="row row--end">
             <button
               className="btn-light"
               type="button"
@@ -300,56 +338,7 @@ export default function NuevoItem() {
             className="btn"
             disabled={!puedeGuardar || guardando}
             type="button"
-            onClick={async () => {
-              try {
-                setGuardando(true);
-                const payload = {
-                  codigo: form.codigo.trim(),
-                  categoria: form.categoria,
-                  subcategoria: form.subcategoria.trim() || null,
-                  descripcion: form.descripcion.trim(),
-                  marca: form.marca.trim() || null,
-                  modelo: form.modelo.trim() || null,
-                  serie: form.serie.trim() || null,
-                  talla: form.talla.trim() || null,
-                  fecha_fabricacion: form.fecha_fabricacion || null,
-                  estado: form.estado,
-                  criticidad: form.criticidad,
-                  ubicacion_actual_id:
-                    form.modo === "UBICAR" ? Number(form.ubicacion_id) : null,
-                  ubicacion_detalle:
-                    form.modo === "UBICAR" && esCarro ? form.ubicacion_detalle.trim() || null : null,
-                };
-
-                const r = await crearItem(payload);
-
-                // Un item nunca se crea ya asignado: si se eligió bombero, se
-                // genera de inmediato el acta de entrega para ese item nuevo.
-                if (form.modo === "ASIGNAR" && form.bombero_id) {
-                  try {
-                    const { id: actaId } = await solicitarActaEntrega({
-                      bombero_id: Number(form.bombero_id),
-                      item_ids: [r.id],
-                    });
-                    toast("Ítem creado. Imprime el acta, fírmala y súbela para confirmar la entrega.", "success");
-                    await abrirDocumento(actaId);
-                  } catch (e2) {
-                    console.error(e2);
-                    toast("El ítem se creó, pero no se pudo generar el acta. Puedes generarla desde su ficha.");
-                  }
-                } else {
-                  toast("Ítem creado", "success");
-                }
-
-                if (r?.id) navigate(`/items/${r.id}`);
-                else navigate("/");
-              } catch (e) {
-                console.error(e);
-                toast("No se pudo crear ítem (revisa backend / campos).");
-              } finally {
-                setGuardando(false);
-              }
-            }}
+            onClick={guardar}
           >
             Guardar Item
           </button>

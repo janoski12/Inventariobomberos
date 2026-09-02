@@ -1,6 +1,6 @@
 const router = require("express").Router();
 const db = require("../db");
-const { ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, isNil, cleanText, badRequest, notFound, conflict, serverError, esFechaValida, fechaLocalISO } = require("../lib/helpers");
+const { ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, isNil, cleanText, badRequest, notFound, conflict, serverError, esFechaValida, fechaLocalISO, descripcionOrigenItem } = require("../lib/helpers");
 const { quienRegistra } = require("../lib/auth");
 const { itemsDeActa } = require("./actas");
 const { borrarSiExiste } = require("../lib/documentos");
@@ -358,11 +358,7 @@ router.post("/items/:id/mover", (req, res) => {
         const ubicacion = db.prepare("SELECT * FROM ubicacion WHERE id=?").get(ubicacion_id);
         if (!ubicacion) return notFound(res, "Ubicacion no encontrada");
 
-        const desdeMover = item.asignado_bombero_id
-            ? `Asignado a ${db.prepare("SELECT nombre FROM bombero WHERE id=?").get(item.asignado_bombero_id)?.nombre ?? "Bombero desconocido"}`
-            : item.ubicacion_actual_id
-                ? `Ubicado en ${db.prepare("SELECT nombre FROM ubicacion WHERE id=?").get(item.ubicacion_actual_id)?.nombre ?? "Ubicación desconocida"}`
-                : "Sin asignación";
+        const desdeMover = descripcionOrigenItem(item);
 
         const trx = db.transaction(() => {
             db.prepare(`UPDATE item SET ubicacion_actual_id=?, ubicacion_detalle=?, asignado_bombero_id=NULL, actualizado_en=datetime('now','localtime') WHERE id=?`).run(ubicacion_id, ubicacion_detalle, id);

@@ -1,5 +1,6 @@
 const multer = require("multer");
 const crypto = require("crypto");
+const db = require("../db");
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -100,6 +101,20 @@ function parseXlsxBuffer(req, res) {
     return req.file.buffer;
 }
 
+// Describe donde estaba un item antes de moverlo o asignarlo (el "desde" de
+// un movimiento): asignado a un bombero, ubicado en un lugar, o sin asignar.
+function descripcionOrigenItem(item) {
+    if (item.asignado_bombero_id) {
+        const bombero = db.prepare("SELECT nombre FROM bombero WHERE id=?").get(item.asignado_bombero_id);
+        return `Asignado a ${bombero?.nombre ?? "Bombero desconocido"}`;
+    }
+    if (item.ubicacion_actual_id) {
+        const ubicacion = db.prepare("SELECT nombre FROM ubicacion WHERE id=?").get(item.ubicacion_actual_id);
+        return `Ubicado en ${ubicacion?.nombre ?? "Ubicación desconocida"}`;
+    }
+    return "Sin asignación";
+}
+
 // Valida el archivo subido como acta de entrega firmada (foto o escaneo)
 function parseDocumentoBuffer(req, res) {
     if (!req.file) { badRequest(res, "Debes subir el documento firmado"); return null; }
@@ -114,4 +129,5 @@ module.exports = {
     TIPOS_CONTROL, RESULTADOS_CONTROL, ESTADOS_ASIGNACION, RESULTADOS_REVISION,
     isNil, cleanText, badRequest, notFound, conflict, serverError, generarPasswordTemporal,
     normXlsx, normFechaXlsx, parseXlsxBuffer, esFechaValida, fechaLocalISO, parseDocumentoBuffer,
+    descripcionOrigenItem,
 };

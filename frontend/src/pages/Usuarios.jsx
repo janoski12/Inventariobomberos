@@ -7,6 +7,30 @@ import Modal from "../components/Modal";
 const ROLES = ["ADMIN", "OPERADOR"];
 const FORM_VACIO = { username: "", nombre: "", rol: "OPERADOR" };
 
+function UsuarioCard({ usuario: u, esActual, deshabilitado, onEditar, onEliminar }) {
+  return (
+    <div className="card">
+      <div className="spread">
+        <div>
+          <div className="spread" style={{ gap: 10, justifyContent: "flex-start" }}>
+            <span className="card-title">{u.username}</span>
+            <span className={u.rol === "ADMIN" ? "chip chip--alta" : "chip chip--baja-crit"}>{u.rol}</span>
+            {!u.activo && <span className="chip chip--baja">INACTIVO</span>}
+            {esActual && <span className="chip chip--media">tú</span>}
+          </div>
+          <div className="card-muted" style={{ marginTop: 4 }}>{u.nombre ?? "Sin nombre"}</div>
+        </div>
+        <div className="row">
+          <button className="btn-light" onClick={onEditar}>Editar</button>
+          <button className="btn-danger" disabled={deshabilitado || esActual} onClick={onEliminar}>
+            Eliminar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Usuarios() {
   const { usuario: actual } = useAuth();
   const { toast, confirm }  = useDialog();
@@ -30,7 +54,61 @@ export default function Usuarios() {
 
   useEffect(() => { cargar(); }, []);
 
-  const puedeGuardar = form.username.trim();
+  // Centraliza el ciclo guardando/errores de las acciones contra la API
+  async function conGuardando(accion) {
+    try {
+      setGuardando(true);
+      await accion();
+    } catch (e) {
+      toast(e.message);
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  const campoForm = (campo) => (e) => setForm((p) => ({ ...p, [campo]: e.target.value }));
+  const campoEdit = (campo) => (e) => setEdit((p) => ({ ...p, [campo]: e.target.value }));
+
+  function crear() {
+    const username = form.username.trim();
+    return conGuardando(async () => {
+      const data = await crearUsuario({ username, nombre: form.nombre.trim() || null, rol: form.rol });
+      setForm(FORM_VACIO);
+      await cargar();
+      setTempInfo({ username, password: data.password_temporal });
+    });
+  }
+
+  function abrirEdicion(u) {
+    setEdit({ id: u.id, username: u.username, nombre: u.nombre ?? "", rol: u.rol, activo: u.activo, password: "" });
+    setOpenEdit(true);
+  }
+
+  function guardarEdicion() {
+    return conGuardando(async () => {
+      const payload = { nombre: edit.nombre.trim() || null, rol: edit.rol, activo: edit.activo };
+      if (edit.password) payload.password = edit.password;
+      await actualizarUsuario(edit.id, payload);
+      await cargar();
+      setOpenEdit(false);
+      toast("Usuario actualizado", "success");
+    });
+  }
+
+  function eliminar(u) {
+    return conGuardando(async () => {
+      if (!(await confirm(`¿Eliminar al usuario "${u.username}"?`))) return;
+      await eliminarUsuario(u.id);
+      await cargar();
+    });
+  }
+
+  function copiarPasswordTemporal() {
+    navigator.clipboard?.writeText(tempInfo.password).catch(() => {});
+    toast("Copiada al portapapeles", "success");
+  }
+
+  const puedeGuardar = !!form.username.trim();
 
   return (
     <div className="container">
@@ -43,20 +121,17 @@ export default function Usuarios() {
         <div className="grid-2" style={{ marginTop: 10 }}>
           <label className="label">
             Usuario
-            <input className="input" value={form.username}
-              onChange={(e) => setForm(p => ({ ...p, username: e.target.value }))}
+            <input className="input" value={form.username} onChange={campoForm("username")}
               placeholder="Ej: jperez" autoComplete="off" />
           </label>
           <label className="label">
             Nombre
-            <input className="input" value={form.nombre}
-              onChange={(e) => setForm(p => ({ ...p, nombre: e.target.value }))}
+            <input className="input" value={form.nombre} onChange={campoForm("nombre")}
               placeholder="Ej: Juan Pérez" />
           </label>
           <label className="label">
             Rol
-            <select className="input" value={form.rol}
-              onChange={(e) => setForm(p => ({ ...p, rol: e.target.value }))}>
+            <select className="input" value={form.rol} onChange={campoForm("rol")}>
               {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </label>
@@ -65,23 +140,8 @@ export default function Usuarios() {
           La contraseña la genera el sistema: se muestra una sola vez al crear la cuenta.
           Se le pedirá cambiarla obligatoriamente en su primer ingreso.
         </p>
-        <div className="row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
-          <button className="btn" disabled={!puedeGuardar || guardando}
-            onClick={async () => {
-              const username = form.username.trim();
-              try {
-                setGuardando(true);
-                const data = await crearUsuario({
-                  username,
-                  nombre: form.nombre.trim() || null,
-                  rol: form.rol,
-                });
-                setForm(FORM_VACIO);
-                await cargar();
-                setTempInfo({ username, password: data.password_temporal });
-              } catch (e) { toast(e.message); }
-              finally { setGuardando(false); }
-            }}>
+        <div className="row row--end" style={{ marginTop: 12 }}>
+          <button className="btn" disabled={!puedeGuardar || guardando} onClick={crear}>
             Guardar
           </button>
         </div>
@@ -94,38 +154,8 @@ export default function Usuarios() {
 
       <div className="stack">
         {lista.map((u) => (
-          <div key={u.id} className="card">
-            <div className="spread">
-              <div>
-                <div className="spread" style={{ gap: 10, justifyContent: "flex-start" }}>
-                  <span className="card-title">{u.username}</span>
-                  <span className={u.rol === "ADMIN" ? "chip chip--alta" : "chip chip--baja-crit"}>{u.rol}</span>
-                  {!u.activo && <span className="chip chip--baja">INACTIVO</span>}
-                  {u.id === actual.id && <span className="chip chip--media">tú</span>}
-                </div>
-                <div className="card-muted" style={{ marginTop: 4 }}>
-                  {u.nombre ?? "Sin nombre"}
-                </div>
-              </div>
-              <div className="row">
-                <button className="btn-light" onClick={() => {
-                  setEdit({ id: u.id, username: u.username, nombre: u.nombre ?? "", rol: u.rol, activo: u.activo, password: "" });
-                  setOpenEdit(true);
-                }}>
-                  Editar
-                </button>
-                <button className="btn-danger" disabled={guardando || u.id === actual.id}
-                  onClick={async () => {
-                    if (!await confirm(`¿Eliminar al usuario "${u.username}"?`)) return;
-                    try { setGuardando(true); await eliminarUsuario(u.id); await cargar(); }
-                    catch (e) { toast(e.message); }
-                    finally { setGuardando(false); }
-                  }}>
-                  Eliminar
-                </button>
-              </div>
-            </div>
-          </div>
+          <UsuarioCard key={u.id} usuario={u} esActual={u.id === actual.id} deshabilitado={guardando}
+            onEditar={() => abrirEdicion(u)} onEliminar={() => eliminar(u)} />
         ))}
       </div>
 
@@ -136,14 +166,12 @@ export default function Usuarios() {
             <p className="muted">Usuario: <strong>{edit.username}</strong></p>
             <label className="label">
               Nombre
-              <input className="input" value={edit.nombre}
-                onChange={(e) => setEdit(p => ({ ...p, nombre: e.target.value }))} />
+              <input className="input" value={edit.nombre} onChange={campoEdit("nombre")} />
             </label>
             <div className="grid-2">
               <label className="label">
                 Rol
-                <select className="input" value={edit.rol}
-                  onChange={(e) => setEdit(p => ({ ...p, rol: e.target.value }))}>
+                <select className="input" value={edit.rol} onChange={campoEdit("rol")}>
                   {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </label>
@@ -158,8 +186,7 @@ export default function Usuarios() {
             </div>
             <label className="label">
               Nueva contraseña (opcional)
-              <input className="input" type="password" value={edit.password}
-                onChange={(e) => setEdit(p => ({ ...p, password: e.target.value }))}
+              <input className="input" type="password" value={edit.password} onChange={campoEdit("password")}
                 placeholder="Dejar vacío para no cambiar" autoComplete="new-password" />
             </label>
             {edit.password && (
@@ -168,21 +195,9 @@ export default function Usuarios() {
               </p>
             )}
 
-            <div className="row" style={{ justifyContent: "flex-end" }}>
+            <div className="row row--end">
               <button className="btn-light" onClick={() => setOpenEdit(false)}>Cancelar</button>
-              <button className="btn" disabled={guardando}
-                onClick={async () => {
-                  try {
-                    setGuardando(true);
-                    const payload = { nombre: edit.nombre.trim() || null, rol: edit.rol, activo: edit.activo };
-                    if (edit.password) payload.password = edit.password;
-                    await actualizarUsuario(edit.id, payload);
-                    await cargar();
-                    setOpenEdit(false);
-                    toast("Usuario actualizado", "success");
-                  } catch (e) { toast(e.message); }
-                  finally { setGuardando(false); }
-                }}>
+              <button className="btn" disabled={guardando} onClick={guardarEdicion}>
                 Guardar cambios
               </button>
             </div>
@@ -204,13 +219,8 @@ export default function Usuarios() {
                 {tempInfo.password}
               </span>
             </div>
-            <div className="row" style={{ justifyContent: "flex-end" }}>
-              <button className="btn-light" type="button" onClick={() => {
-                navigator.clipboard?.writeText(tempInfo.password).catch(() => {});
-                toast("Copiada al portapapeles", "success");
-              }}>
-                Copiar
-              </button>
+            <div className="row row--end">
+              <button className="btn-light" type="button" onClick={copiarPasswordTemporal}>Copiar</button>
               <button className="btn" type="button" onClick={() => setTempInfo(null)}>Listo</button>
             </div>
           </div>

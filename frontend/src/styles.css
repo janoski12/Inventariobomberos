@@ -253,6 +253,7 @@ h1, h2, h3 { margin: 0; }
 .container   { max-width: 900px; margin: 0 auto; }
 .stack  { display: grid; gap: 10px; }
 .row    { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.row--end { justify-content: flex-end; }
 .spread { display: flex; justify-content: space-between; gap: 12px; }
 
 /* ===== CARD ===== */

@@ -31,11 +31,6 @@ router.post("/importar", requireAdmin, upload.single("archivo"), async (req, res
             return xlsx.utils.sheet_to_json(ws, { defval: "" });
         }
 
-        function norm(v) {
-            if (v === undefined || v === null) return "";
-            return String(v).trim();
-        }
-
         const bomberos   = readSheet("Bomberos");
         const ubicaciones = readSheet("Ubicaciones");
         const items      = readSheet("Items");
@@ -44,19 +39,19 @@ router.post("/importar", requireAdmin, upload.single("archivo"), async (req, res
         // Validaciones de unicidad
         const uNames = new Set();
         for (const u of ubicaciones) {
-            const n = norm(u.nombre); if (!n) continue;
+            const n = normXlsx(u.nombre); if (!n) continue;
             if (uNames.has(n)) return badRequest(res, `Ubicación duplicada: "${n}"`);
             uNames.add(n);
         }
         const bNames = new Set();
         for (const b of bomberos) {
-            const n = norm(b.nombre); if (!n) continue;
+            const n = normXlsx(b.nombre); if (!n) continue;
             if (bNames.has(n)) return badRequest(res, `Bombero duplicado: "${n}"`);
             bNames.add(n);
         }
         const codes = new Set();
         for (const it of items) {
-            const c = norm(it.codigo); if (!c) continue;
+            const c = normXlsx(it.codigo); if (!c) continue;
             if (codes.has(c)) return badRequest(res, `Código de ítem duplicado: "${c}"`);
             codes.add(c);
         }
@@ -80,9 +75,9 @@ router.post("/importar", requireAdmin, upload.single("archivo"), async (req, res
             db.prepare("DELETE FROM ubicacion").run();
 
             for (const u of ubicaciones) {
-                const nombre = norm(u.nombre); if (!nombre) continue;
-                const tipo   = TIPOS_UBICACION.includes(norm(u.tipo).toUpperCase()) ? norm(u.tipo).toUpperCase() : "OTRO";
-                insUbicacion.run(nombre, tipo, norm(u.responsable) || null, norm(u.activo) === "0" ? 0 : 1);
+                const nombre = normXlsx(u.nombre); if (!nombre) continue;
+                const tipo   = TIPOS_UBICACION.includes(normXlsx(u.tipo).toUpperCase()) ? normXlsx(u.tipo).toUpperCase() : "OTRO";
+                insUbicacion.run(nombre, tipo, normXlsx(u.responsable) || null, normXlsx(u.activo) === "0" ? 0 : 1);
             }
 
             // codigo_qr es gestionado por el sistema: UBIC-XXXX segun el id
@@ -92,35 +87,35 @@ router.post("/importar", requireAdmin, upload.single("archivo"), async (req, res
             for (const r of db.prepare("SELECT id, nombre FROM ubicacion").all()) ubicMap.set(r.nombre, r.id);
 
             for (const b of bomberos) {
-                const nombre = norm(b.nombre); if (!nombre) continue;
-                insBombero.run(nombre, norm(b.cargo) || null, norm(b.estado).toUpperCase() || "ACTIVO", norm(b.observaciones) || null, norm(b.rut) || null, norm(b.numero_registro) || null);
+                const nombre = normXlsx(b.nombre); if (!nombre) continue;
+                insBombero.run(nombre, normXlsx(b.cargo) || null, normXlsx(b.estado).toUpperCase() || "ACTIVO", normXlsx(b.observaciones) || null, normXlsx(b.rut) || null, normXlsx(b.numero_registro) || null);
             }
 
             const bomMap = new Map();
             for (const r of db.prepare("SELECT id, nombre FROM bombero").all()) bomMap.set(r.nombre, r.id);
 
             for (const it of items) {
-                const codigo = norm(it.codigo); if (!codigo) continue;
-                const categoria  = CATEGORIAS.includes(norm(it.categoria).toUpperCase()) ? norm(it.categoria).toUpperCase() : "OTRO";
-                const estado     = ESTADOS_ITEM.includes(norm(it.estado).toUpperCase())  ? norm(it.estado).toUpperCase()    : "OPERATIVO";
-                const criticidad = CRITICIDADES.includes(norm(it.criticidad).toUpperCase()) ? norm(it.criticidad).toUpperCase() : "MEDIA";
-                const ubicNombre = norm(it.ubicacion_nombre);
-                const bomNombre  = norm(it.bombero_nombre);
+                const codigo = normXlsx(it.codigo); if (!codigo) continue;
+                const categoria  = CATEGORIAS.includes(normXlsx(it.categoria).toUpperCase()) ? normXlsx(it.categoria).toUpperCase() : "OTRO";
+                const estado     = ESTADOS_ITEM.includes(normXlsx(it.estado).toUpperCase())  ? normXlsx(it.estado).toUpperCase()    : "OPERATIVO";
+                const criticidad = CRITICIDADES.includes(normXlsx(it.criticidad).toUpperCase()) ? normXlsx(it.criticidad).toUpperCase() : "MEDIA";
+                const ubicNombre = normXlsx(it.ubicacion_nombre);
+                const bomNombre  = normXlsx(it.bombero_nombre);
                 if (ubicNombre && bomNombre) throw new Error(`Ítem "${codigo}": no puede tener ubicación y bombero simultáneamente`);
                 const ubicId = ubicNombre ? ubicMap.get(ubicNombre) ?? (() => { throw new Error(`Ítem "${codigo}": ubicación no encontrada "${ubicNombre}"`); })() : null;
                 const bomId  = bomNombre  ? bomMap.get(bomNombre)   ?? (() => { throw new Error(`Ítem "${codigo}": bombero no encontrado "${bomNombre}"`);   })() : null;
-                insItem.run(codigo, categoria, norm(it.subcategoria) || null, norm(it.descripcion) || codigo, norm(it.marca) || null, norm(it.modelo) || null, norm(it.serie) || null, norm(it.talla) || null, estado, criticidad, ubicId, norm(it.ubicacion_detalle) || null, bomId, normFechaXlsx(it.fecha_fabricacion), normFechaXlsx(it.fecha_recepcion), normFechaXlsx(it.fecha_vencimiento));
+                insItem.run(codigo, categoria, normXlsx(it.subcategoria) || null, normXlsx(it.descripcion) || codigo, normXlsx(it.marca) || null, normXlsx(it.modelo) || null, normXlsx(it.serie) || null, normXlsx(it.talla) || null, estado, criticidad, ubicId, normXlsx(it.ubicacion_detalle) || null, bomId, normFechaXlsx(it.fecha_fabricacion), normFechaXlsx(it.fecha_recepcion), normFechaXlsx(it.fecha_vencimiento));
             }
 
             const itemMap = new Map();
             for (const r of db.prepare("SELECT id, codigo FROM item").all()) itemMap.set(r.codigo, r.id);
 
             for (const c of controles) {
-                const codigo_item = norm(c.codigo_item); if (!codigo_item) continue;
+                const codigo_item = normXlsx(c.codigo_item); if (!codigo_item) continue;
                 const itemId = itemMap.get(codigo_item);
                 if (!itemId) throw new Error(`Control referencia ítem inexistente: "${codigo_item}"`);
-                const tipo = TIPOS_CONTROL.includes(norm(c.tipo).toUpperCase()) ? norm(c.tipo).toUpperCase() : "INSPECCION";
-                insControl.run(itemId, tipo, norm(c.fecha_objetivo) || null, norm(c.fecha_real) || null, norm(c.resultado) || null, norm(c.observacion) || null);
+                const tipo = TIPOS_CONTROL.includes(normXlsx(c.tipo).toUpperCase()) ? normXlsx(c.tipo).toUpperCase() : "INSPECCION";
+                insControl.run(itemId, tipo, normXlsx(c.fecha_objetivo) || null, normXlsx(c.fecha_real) || null, normXlsx(c.resultado) || null, normXlsx(c.observacion) || null);
             }
 
             for (const r of db.prepare(`SELECT it.id, u.nombre AS ubic, b.nombre AS bom FROM item it LEFT JOIN ubicacion u ON u.id = it.ubicacion_actual_id LEFT JOIN bombero b ON b.id = it.asignado_bombero_id`).all()) {
@@ -132,10 +127,10 @@ router.post("/importar", requireAdmin, upload.single("archivo"), async (req, res
         res.json({
             ok: true,
             resumen: {
-                bomberos:   bomberos.filter(b => norm(b.nombre)).length,
-                ubicaciones: ubicaciones.filter(u => norm(u.nombre)).length,
-                items:       items.filter(i => norm(i.codigo)).length,
-                controles:   controles.filter(c => norm(c.codigo_item)).length,
+                bomberos:   bomberos.filter(b => normXlsx(b.nombre)).length,
+                ubicaciones: ubicaciones.filter(u => normXlsx(u.nombre)).length,
+                items:       items.filter(i => normXlsx(i.codigo)).length,
+                controles:   controles.filter(c => normXlsx(c.codigo_item)).length,
             },
         });
     } catch (e) {

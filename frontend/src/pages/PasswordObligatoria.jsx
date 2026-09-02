@@ -18,6 +18,8 @@ export default function PasswordObligatoria() {
   const puedeGuardar =
     form.actual.length > 0 && form.nueva.length >= 6 && form.repetir.length > 0 && !guardando;
 
+  const campo = (nombre) => (e) => setForm((p) => ({ ...p, [nombre]: e.target.value }));
+
   async function onSubmit(e) {
     e.preventDefault();
     if (form.nueva !== form.repetir) {
@@ -54,7 +56,7 @@ export default function PasswordObligatoria() {
             className="input"
             type="password"
             value={form.actual}
-            onChange={(e) => setForm((p) => ({ ...p, actual: e.target.value }))}
+            onChange={campo("actual")}
             autoComplete="current-password"
             autoFocus
           />
@@ -66,7 +68,7 @@ export default function PasswordObligatoria() {
             className="input"
             type="password"
             value={form.nueva}
-            onChange={(e) => setForm((p) => ({ ...p, nueva: e.target.value }))}
+            onChange={campo("nueva")}
             placeholder="Mínimo 6 caracteres"
             autoComplete="new-password"
           />
@@ -78,7 +80,7 @@ export default function PasswordObligatoria() {
             className="input"
             type="password"
             value={form.repetir}
-            onChange={(e) => setForm((p) => ({ ...p, repetir: e.target.value }))}
+            onChange={campo("repetir")}
             autoComplete="new-password"
           />
         </label>

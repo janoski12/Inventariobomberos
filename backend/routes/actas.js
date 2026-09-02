@@ -5,7 +5,7 @@ const db = require("../db");
 const { quienRegistra } = require("../lib/auth");
 const {
     upload, badRequest, notFound, conflict, serverError, cleanText, fechaLocalISO,
-    parseDocumentoBuffer, ESTADOS_ASIGNACION,
+    parseDocumentoBuffer, ESTADOS_ASIGNACION, descripcionOrigenItem,
 } = require("../lib/helpers");
 const { generarActaEntrega, DOCS_DIR } = require("../lib/documentos");
 
@@ -140,11 +140,7 @@ router.post("/actas-entrega/:id/confirmar", upload.single("archivo"), (req, res)
                 const item = db.prepare("SELECT * FROM item WHERE id=?").get(itemId);
                 if (!item) continue; // el item pudo haber sido eliminado despues de solicitar
 
-                const desde = item.asignado_bombero_id
-                    ? `Asignado a ${db.prepare("SELECT nombre FROM bombero WHERE id=?").get(item.asignado_bombero_id)?.nombre ?? "Bombero desconocido"}`
-                    : item.ubicacion_actual_id
-                        ? `Ubicado en ${db.prepare("SELECT nombre FROM ubicacion WHERE id=?").get(item.ubicacion_actual_id)?.nombre ?? "Ubicación desconocida"}`
-                        : "Sin asignación";
+                const desde = descripcionOrigenItem(item);
 
                 db.prepare(`
                     UPDATE item SET asignado_bombero_id=?, ubicacion_actual_id=NULL, ubicacion_detalle=NULL, actualizado_en=datetime('now','localtime')
