@@ -57,6 +57,14 @@ try { db.exec("ALTER TABLE item ADD COLUMN ubicacion_detalle TEXT"); } catch {}
 // (se asigna al crear el usuario, o cuando un admin le resetea la clave)
 try { db.exec("ALTER TABLE usuario ADD COLUMN debe_cambiar_password INTEGER NOT NULL DEFAULT 0"); } catch {}
 
+// Migracion: actas de devolucion. Reutilizan la misma tabla acta_entrega que
+// las de entrega (mismo ciclo solicitar -> firmar -> confirmar), distinguidas
+// por "tipo". ubicacion_destino_* solo aplica a las de tipo DEVOLUCION: a
+// donde vuelve el item al confirmarse la devolucion.
+try { db.exec("ALTER TABLE acta_entrega ADD COLUMN tipo TEXT NOT NULL DEFAULT 'ENTREGA'"); } catch {}
+try { db.exec("ALTER TABLE acta_entrega ADD COLUMN ubicacion_destino_id INTEGER"); } catch {}
+try { db.exec("ALTER TABLE acta_entrega ADD COLUMN ubicacion_destino_detalle TEXT"); } catch {}
+
 // La tabla asignacion_pendiente (un item por acta) se reemplazo por acta_entrega +
 // acta_entrega_item (varios items por acta). No hubo datos reales en producción
 // bajo el modelo anterior, asi que se descarta en vez de migrarla.

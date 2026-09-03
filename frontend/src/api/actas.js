@@ -20,6 +20,13 @@ export function solicitarActaEntrega(payload) {
   return request(`${API_URL}/actas-entrega`, { method: "POST", ...json(payload) });
 }
 
+// Solicita la devolución de uno o varios items que un bombero tiene
+// asignados: genera el acta de devolución (los items no cambian de ubicación
+// hasta confirmar con la firma). El bombero se deriva de los items, no se elige.
+export function solicitarActaDevolucion(payload) {
+  return request(`${API_URL}/actas-devolucion`, { method: "POST", ...json(payload) });
+}
+
 export function confirmarActaEntrega(id, archivo) {
   const fd = new FormData();
   fd.append("archivo", archivo);

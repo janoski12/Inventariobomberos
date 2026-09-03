@@ -80,15 +80,98 @@ router.post("/actas-entrega", async (req, res) => {
     }
 });
 
-// Listado de actas (por defecto, pendientes de firma) — para el panel de Reportes
+// Solicitar la devolución de uno o varios ítems que un bombero tiene
+// asignados: genera el acta de devolución (PDF sin firmar). Los ítems NO
+// cambian de ubicación todavía — eso ocurre recién al confirmar con el
+// documento firmado. El bombero no se elige: se deriva de a quién están
+// asignados los ítems (deben ser todos del mismo bombero).
+router.post("/actas-devolucion", async (req, res) => {
+    try {
+        const itemIds = Array.isArray(req.body.item_ids) ? [...new Set(req.body.item_ids.map(Number))] : [];
+        const ubicacionId = Number(req.body.ubicacion_id);
+        const ubicacionDetalle = cleanText(req.body.ubicacion_detalle);
+        const observacion = cleanText(req.body.observacion);
+
+        if (itemIds.length === 0 || itemIds.some((n) => !Number.isInteger(n) || n <= 0))
+            return badRequest(res, "Debes seleccionar al menos un ítem válido");
+        if (!Number.isInteger(ubicacionId) || ubicacionId <= 0)
+            return badRequest(res, "Debes indicar la ubicación de destino");
+
+        const ubicacionDestino = db.prepare("SELECT * FROM ubicacion WHERE id=?").get(ubicacionId);
+        if (!ubicacionDestino) return notFound(res, "Ubicación no encontrada");
+
+        const items = itemIds.map((id) => db.prepare("SELECT * FROM item WHERE id=?").get(id));
+        const faltantes = itemIds.filter((id, i) => !items[i]);
+        if (faltantes.length > 0) return notFound(res, `Ítem(s) no encontrado(s): ${faltantes.join(", ")}`);
+
+        const sinAsignar = items.filter((it) => !it.asignado_bombero_id);
+        if (sinAsignar.length > 0)
+            return badRequest(res, `No están asignados a ningún bombero: ${sinAsignar.map((it) => it.codigo).join(", ")}`);
+
+        const bomberoIds = new Set(items.map((it) => it.asignado_bombero_id));
+        if (bomberoIds.size > 1)
+            return badRequest(res, "Todos los ítems de una devolución deben estar asignados al mismo bombero");
+
+        const bomberoId = items[0].asignado_bombero_id;
+        const bombero = db.prepare("SELECT * FROM bombero WHERE id=?").get(bomberoId);
+        if (!bombero) return notFound(res, "Bombero no encontrado");
+
+        const yaPendientes = db.prepare(`
+            SELECT i.codigo FROM acta_entrega_item ai
+            JOIN acta_entrega ae ON ae.id = ai.acta_id
+            JOIN item i ON i.id = ai.item_id
+            WHERE ae.estado = 'PENDIENTE' AND ai.item_id IN (${itemIds.map(() => "?").join(",")})
+        `).all(...itemIds);
+        if (yaPendientes.length > 0)
+            return conflict(res, `Ya hay una solicitud pendiente de firma con: ${yaPendientes.map((r) => r.codigo).join(", ")}`);
+
+        const solicitadoPor = quienRegistra(req);
+        const fecha = fechaLocalISO();
+
+        const nuevoId = db.transaction(() => {
+            const id = db.prepare(`
+                INSERT INTO acta_entrega (bombero_id, estado, documento_path, observacion, solicitado_por, tipo, ubicacion_destino_id, ubicacion_destino_detalle)
+                VALUES (?, 'PENDIENTE', '', ?, ?, 'DEVOLUCION', ?, ?)
+            `).run(bomberoId, observacion, solicitadoPor, ubicacionId, ubicacionDetalle).lastInsertRowid;
+
+            const insItem = db.prepare("INSERT INTO acta_entrega_item (acta_id, item_id) VALUES (?, ?)");
+            for (const itemId of itemIds) insItem.run(id, itemId);
+
+            return id;
+        })();
+
+        try {
+            const documentoPath = await generarActaEntrega(nuevoId, {
+                tipo: "DEVOLUCION", bombero, items, solicitadoPor, fecha, observacion, ubicacionDestino,
+            });
+            db.prepare("UPDATE acta_entrega SET documento_path=? WHERE id=?").run(documentoPath, nuevoId);
+        } catch (e) {
+            db.transaction(() => {
+                db.prepare("DELETE FROM acta_entrega_item WHERE acta_id=?").run(nuevoId);
+                db.prepare("DELETE FROM acta_entrega WHERE id=?").run(nuevoId);
+            })();
+            throw e;
+        }
+
+        res.status(201).json({ id: nuevoId });
+    } catch (e) {
+        return serverError(res, e, "Error generando la solicitud de devolución");
+    }
+});
+
+// Listado de actas (por defecto, pendientes de firma) — para el panel de Reportes.
+// Incluye tanto entregas como devoluciones (ver "tipo"); ubicacion_destino_*
+// solo viene informado en las de tipo DEVOLUCION.
 router.get("/actas-entrega", (req, res) => {
     const estado = ESTADOS_ASIGNACION.includes(req.query.estado) ? req.query.estado : "PENDIENTE";
     const actas = db.prepare(`
-        SELECT ae.id, ae.estado, ae.observacion, ae.solicitado_por, ae.fecha_solicitud,
+        SELECT ae.id, ae.tipo, ae.estado, ae.observacion, ae.solicitado_por, ae.fecha_solicitud,
                ae.confirmado_por, ae.fecha_confirmacion,
-               b.id AS bombero_id, b.nombre AS bombero_nombre
+               b.id AS bombero_id, b.nombre AS bombero_nombre,
+               ae.ubicacion_destino_id, u.nombre AS ubicacion_destino_nombre, ae.ubicacion_destino_detalle
         FROM acta_entrega ae
         JOIN bombero b ON b.id = ae.bombero_id
+        LEFT JOIN ubicacion u ON u.id = ae.ubicacion_destino_id
         WHERE ae.estado = ?
         ORDER BY ae.fecha_solicitud ASC
     `).all(estado);
@@ -113,7 +196,8 @@ router.get("/actas-entrega/:id/documento-firmado", (req, res) => {
     res.sendFile(acta.documento_firmado_path);
 });
 
-// Confirmar: sube el documento firmado y recién ahí se concreta la entrega de todos los items del acta
+// Confirmar: sube el documento firmado y recién ahí se concreta la entrega (o
+// devolución) de todos los items del acta.
 router.post("/actas-entrega/:id/confirmar", upload.single("archivo"), (req, res) => {
     try {
         const id = Number(req.params.id);
@@ -129,6 +213,13 @@ router.post("/actas-entrega/:id/confirmar", upload.single("archivo"), (req, res)
         const bombero = db.prepare("SELECT * FROM bombero WHERE id=?").get(acta.bombero_id);
         if (!bombero) return notFound(res, "Bombero no encontrado");
 
+        const esDevolucion = acta.tipo === "DEVOLUCION";
+        let destinoUbicacion = null;
+        if (esDevolucion) {
+            destinoUbicacion = db.prepare("SELECT * FROM ubicacion WHERE id=?").get(acta.ubicacion_destino_id);
+            if (!destinoUbicacion) return notFound(res, "La ubicación de destino ya no existe");
+        }
+
         const itemIds = db.prepare("SELECT item_id FROM acta_entrega_item WHERE acta_id=?").all(id).map((r) => r.item_id);
 
         const quien = quienRegistra(req);
@@ -142,15 +233,27 @@ router.post("/actas-entrega/:id/confirmar", upload.single("archivo"), (req, res)
 
                 const desde = descripcionOrigenItem(item);
 
-                db.prepare(`
-                    UPDATE item SET asignado_bombero_id=?, ubicacion_actual_id=NULL, ubicacion_detalle=NULL, actualizado_en=datetime('now','localtime')
-                    WHERE id=?
-                `).run(acta.bombero_id, itemId);
+                if (esDevolucion) {
+                    db.prepare(`
+                        UPDATE item SET asignado_bombero_id=NULL, ubicacion_actual_id=?, ubicacion_detalle=?, actualizado_en=datetime('now','localtime')
+                        WHERE id=?
+                    `).run(acta.ubicacion_destino_id, acta.ubicacion_destino_detalle, itemId);
 
-                db.prepare(`
-                    INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha, asignacion_id)
-                    VALUES (?, 'ASIGNACION', ?, ?, ?, ?, datetime('now','localtime'), ?)
-                `).run(itemId, desde, `Asignado a ${bombero.nombre}`, quien, acta.observacion, id);
+                    db.prepare(`
+                        INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha, asignacion_id)
+                        VALUES (?, 'DEVOLUCION', ?, ?, ?, ?, datetime('now','localtime'), ?)
+                    `).run(itemId, desde, `Ubicado en ${destinoUbicacion.nombre}`, quien, acta.observacion, id);
+                } else {
+                    db.prepare(`
+                        UPDATE item SET asignado_bombero_id=?, ubicacion_actual_id=NULL, ubicacion_detalle=NULL, actualizado_en=datetime('now','localtime')
+                        WHERE id=?
+                    `).run(acta.bombero_id, itemId);
+
+                    db.prepare(`
+                        INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha, asignacion_id)
+                        VALUES (?, 'ASIGNACION', ?, ?, ?, ?, datetime('now','localtime'), ?)
+                    `).run(itemId, desde, `Asignado a ${bombero.nombre}`, quien, acta.observacion, id);
+                }
             }
 
             db.prepare(`
@@ -162,7 +265,7 @@ router.post("/actas-entrega/:id/confirmar", upload.single("archivo"), (req, res)
 
         res.json({ ok: true });
     } catch (e) {
-        return serverError(res, e, "Error confirmando la entrega");
+        return serverError(res, e, "Error confirmando la solicitud");
     }
 });
 

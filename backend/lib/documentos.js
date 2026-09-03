@@ -51,10 +51,13 @@ function dibujarTabla(doc, x, y, colWidths, filas, rowHeight = 24) {
     return curY;
 }
 
-// Genera el PDF del acta de entrega (sin firmar) para una solicitud y la guarda
-// en disco. `items` es un arreglo (una acta puede cubrir varios items a la vez,
-// ej. un kit completo de EPP). Devuelve la ruta absoluta del archivo.
-function generarActaEntrega(id, { bombero, items, solicitadoPor, fecha, observacion }) {
+// Genera el PDF del acta (sin firmar) para una solicitud y la guarda en disco.
+// `items` es un arreglo (una acta puede cubrir varios items a la vez, ej. un
+// kit completo de EPP). `tipo` distingue una entrega (bombero recibe equipo)
+// de una devolucion (bombero devuelve equipo a `ubicacionDestino`). Devuelve
+// la ruta absoluta del archivo.
+function generarActaEntrega(id, { tipo = "ENTREGA", bombero, items, solicitadoPor, fecha, observacion, ubicacionDestino }) {
+    const esDevolucion = tipo === "DEVOLUCION";
     asegurarDir();
     const destino = rutaActaSinFirmar(id);
 
@@ -82,7 +85,7 @@ function generarActaEntrega(id, { bombero, items, solicitadoPor, fecha, observac
 
         doc.y = MARGEN + 78;
         doc.x = MARGEN;
-        doc.font("Helvetica-Bold").fontSize(13).text("ACTA DE RECEPCIÓN", MARGEN, doc.y, { width: ANCHO_UTIL, align: "center", underline: true });
+        doc.font("Helvetica-Bold").fontSize(13).text(esDevolucion ? "ACTA DE DEVOLUCIÓN" : "ACTA DE RECEPCIÓN", MARGEN, doc.y, { width: ANCHO_UTIL, align: "center", underline: true });
         doc.moveDown(1.5);
 
         // ── Cuerpo ──
@@ -95,7 +98,11 @@ function generarActaEntrega(id, { bombero, items, solicitadoPor, fecha, observac
         doc.font("Helvetica-Bold").text(bombero.nombre, { continued: true });
         doc.font("Helvetica").text(`, RUT N° `, { continued: true });
         doc.font("Helvetica-Bold").text(bombero.rut || "________________", { continued: true });
-        doc.font("Helvetica").text(`, dejo constancia de la entrega de los siguientes elementos de protección personal:`);
+        doc.font("Helvetica").text(
+            esDevolucion
+                ? `, dejo constancia de la devolución de los siguientes elementos de protección personal:`
+                : `, dejo constancia de la entrega de los siguientes elementos de protección personal:`
+        );
         doc.moveDown(1);
 
         // ── Tabla de items ──
@@ -108,6 +115,12 @@ function generarActaEntrega(id, { bombero, items, solicitadoPor, fecha, observac
         doc.y = yTrasTabla + 16;
         doc.x = MARGEN;
 
+        if (esDevolucion && ubicacionDestino) {
+            doc.font("Helvetica").fontSize(10).text("Los elementos quedan de vuelta en: ", MARGEN, doc.y, { width: ANCHO_UTIL, continued: true });
+            doc.font("Helvetica-Bold").text(ubicacionDestino.nombre);
+            doc.moveDown(1);
+        }
+
         if (observacion) {
             doc.font("Helvetica-Bold").fontSize(10).text("Observación", MARGEN, doc.y, { width: ANCHO_UTIL });
             doc.font("Helvetica").text(observacion, { width: ANCHO_UTIL });
@@ -115,8 +128,11 @@ function generarActaEntrega(id, { bombero, items, solicitadoPor, fecha, observac
         }
 
         doc.font("Helvetica").fontSize(10).text(
-            "Para constancia de lo anteriormente señalado, se procede a firmar la entrega conforme " +
-            "de los implementos ya señalados.",
+            esDevolucion
+                ? "Para constancia de lo anteriormente señalado, se procede a firmar la devolución conforme " +
+                  "de los implementos ya señalados."
+                : "Para constancia de lo anteriormente señalado, se procede a firmar la entrega conforme " +
+                  "de los implementos ya señalados.",
             MARGEN, doc.y, { width: ANCHO_UTIL, align: "justify" }
         );
 
@@ -126,7 +142,7 @@ function generarActaEntrega(id, { bombero, items, solicitadoPor, fecha, observac
         const anchoFirma = (ANCHO_UTIL - 30) / 2;
         doc.moveTo(MARGEN, yFirma).lineTo(MARGEN + anchoFirma, yFirma).stroke();
         doc.moveTo(MARGEN + anchoFirma + 30, yFirma).lineTo(MARGEN + anchoFirma * 2 + 30, yFirma).stroke();
-        doc.fontSize(9).text("Firma del Voluntario que recibe", MARGEN, yFirma + 4, { width: anchoFirma, align: "center" });
+        doc.fontSize(9).text(esDevolucion ? "Firma del Voluntario que devuelve" : "Firma del Voluntario que recibe", MARGEN, yFirma + 4, { width: anchoFirma, align: "center" });
         doc.text("Firma Capitán de Compañía", MARGEN + anchoFirma + 30, yFirma + 4, { width: anchoFirma, align: "center" });
 
         // ── Pie institucional ──
@@ -140,7 +156,7 @@ function generarActaEntrega(id, { bombero, items, solicitadoPor, fecha, observac
 
         doc.fontSize(7).fillColor("#999999").text(
             `Acta generada por el sistema el ${fecha} · Solicitada por ${solicitadoPor}. Debe imprimirse, ` +
-            "firmarse, y subirse fotografiada o escaneada al sistema para confirmar la entrega.",
+            `firmarse, y subirse fotografiada o escaneada al sistema para confirmar la ${esDevolucion ? "devolución" : "entrega"}.`,
             MARGEN, 745, { width: ANCHO_UTIL, align: "center" }
         );
 

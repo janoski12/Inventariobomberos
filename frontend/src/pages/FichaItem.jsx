@@ -5,6 +5,7 @@ import { obtenerItem, obtenerMovimientos, cambiarEstadoItem, moverItem, actualiz
 import { cancelarActaEntrega, abrirDocumento, abrirDocumentoFirmado } from "../api/actas";
 import CreatableSelect from "../components/CreatableSelect";
 import EntregaKitModal from "../components/EntregaKitModal";
+import DevolverItemsModal from "../components/DevolverItemsModal";
 import ConfirmarActaModal from "../components/ConfirmarActaModal";
 import { useDialog } from "../context/DialogContext";
 import { useAuth } from "../context/AuthContext";
@@ -27,6 +28,7 @@ export default function FichaItem() {
   const [ubicaciones, setUbicaciones] = useState([]);
 
   const [openAsignar, setOpenAsignar] = useState(false);
+  const [openDevolver, setOpenDevolver] = useState(false);
   const [openMover, setOpenMover] = useState(false);
   const [openEstado, setOpenEstado] = useState(false);
   const [openConfirmarFirma, setOpenConfirmarFirma] = useState(false);
@@ -152,14 +154,18 @@ export default function FichaItem() {
         {item.codigo} - {item.descripcion}
       </h2>
 
-      {/* BANNER: acta de entrega pendiente de firma (puede incluir otros items del mismo kit) */}
+      {/* BANNER: acta de entrega o devolución pendiente de firma (puede incluir otros items del mismo kit) */}
       {item.acta_pendiente && (
         <div className="card card--pendiente-firma" style={{ marginTop: 10 }}>
           <div className="spread">
             <div>
               <div className="card-title">⏳ Pendiente de firma</div>
               <div className="card-detail">
-                Entrega solicitada a <b>{item.acta_pendiente.bombero_nombre}</b>
+                {item.acta_pendiente.tipo === "DEVOLUCION" ? (
+                  <>Devolución de <b>{item.acta_pendiente.bombero_nombre}</b> solicitada, vuelve a <b>{item.acta_pendiente.ubicacion_destino_nombre}</b></>
+                ) : (
+                  <>Entrega solicitada a <b>{item.acta_pendiente.bombero_nombre}</b></>
+                )}
                 <br />
                 Solicitada el {item.acta_pendiente.fecha_solicitud} por {item.acta_pendiente.solicitado_por}
                 {item.acta_pendiente.observacion ? <><br />Obs: {item.acta_pendiente.observacion}</> : null}
@@ -191,7 +197,11 @@ export default function FichaItem() {
                 className="btn-danger"
                 disabled={procesandoFirma}
                 onClick={async () => {
-                  if (!await confirm("¿Cancelar esta solicitud de entrega? Ningún ítem cambiará de dueño.")) return;
+                  const esDevolucion = item.acta_pendiente.tipo === "DEVOLUCION";
+                  const pregunta = esDevolucion
+                    ? "¿Cancelar esta solicitud de devolución? El ítem seguirá asignado al bombero."
+                    : "¿Cancelar esta solicitud de entrega? Ningún ítem cambiará de dueño.";
+                  if (!await confirm(pregunta)) return;
                   try {
                     setProcesandoFirma(true);
                     await cancelarActaEntrega(item.acta_pendiente.id);
@@ -221,6 +231,16 @@ export default function FichaItem() {
             }}
           >
             Asignar a bombero
+          </button>
+        )}
+        {item.asignado_bombero_id && !item.acta_pendiente && (
+          <button
+            className="btn"
+            onClick={() => {
+              setOpenDevolver(true);
+            }}
+          >
+            Iniciar devolución
           </button>
         )}
         <button
@@ -323,7 +343,7 @@ export default function FichaItem() {
                 <div><b>Responsable:</b> {m.responsable ?? "-"}</div>
                 {m.observacion ? <div><b>Obs:</b> {m.observacion}</div> : null}
               </div>
-              {m.tipo === "ASIGNACION" && m.asignacion_id && (
+              {(m.tipo === "ASIGNACION" || m.tipo === "DEVOLUCION") && m.asignacion_id && (
                 <div style={{ marginTop: 8 }}>
                   <button
                     className="btn-light"
@@ -509,7 +529,17 @@ export default function FichaItem() {
         onDone={recargarFicha}
       />
 
-      {/* Sube el acta firmada; recién aquí se concreta la entrega */}
+      {/* Solicita el acta de devolución (puede incluir más items del mismo bombero);
+          el item se libera recién al confirmar con la firma */}
+      <DevolverItemsModal
+        open={openDevolver}
+        onClose={() => setOpenDevolver(false)}
+        bombero={item.asignado_bombero_id ? { id: item.asignado_bombero_id, nombre: item.bombero_nombre } : null}
+        itemFijo={{ id: item.id, codigo: item.codigo, descripcion: item.descripcion }}
+        onDone={recargarFicha}
+      />
+
+      {/* Sube el acta firmada; recién aquí se concreta la entrega o devolución */}
       <ConfirmarActaModal
         open={openConfirmarFirma}
         onClose={() => setOpenConfirmarFirma(false)}

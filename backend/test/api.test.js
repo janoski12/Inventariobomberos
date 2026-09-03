@@ -405,6 +405,138 @@ describe("Entrega de kit (uno o varios items) con acta de recepción", () => {
     });
 });
 
+describe("Acta de devolución (bombero devuelve items a una ubicación)", () => {
+    let bomberoId, bodegaId, carroId, itemId;
+
+    test("preparar: bombero con un item asignado (vía acta de entrega confirmada)", async () => {
+        const bom = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero Devolución" });
+        bomberoId = bom.body.id;
+        const bodega = await request(app).post("/api/ubicaciones").set(auth(adminToken)).send({ nombre: "Bodega Devolución", tipo: "BODEGA" });
+        bodegaId = bodega.body.id;
+        const carro = await request(app).post("/api/ubicaciones").set(auth(adminToken)).send({ nombre: "Carro Devolución", tipo: "CARRO" });
+        carroId = carro.body.id;
+
+        const item = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ codigo: "DEV-001", categoria: "EPP", descripcion: "Casco a devolver" });
+        itemId = item.body.id;
+
+        const acta = await request(app).post("/api/actas-entrega").set(auth(adminToken))
+            .send({ bombero_id: bomberoId, item_ids: [itemId] });
+        await request(app).post(`/api/actas-entrega/${acta.body.id}/confirmar`).set(auth(adminToken))
+            .attach("archivo", Buffer.from("firma"), "firma.jpg");
+
+        const ficha = await request(app).get(`/api/items/${itemId}`).set(auth(adminToken));
+        assert.equal(ficha.body.asignado_bombero_id, bomberoId);
+    });
+
+    test("no se puede solicitar devolución de un item que no está asignado a nadie → 400", async () => {
+        const suelto = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ codigo: "DEV-SUELTO", categoria: "EPP", descripcion: "Sin dueño" });
+        const res = await request(app).post("/api/actas-devolucion").set(auth(adminToken))
+            .send({ item_ids: [suelto.body.id], ubicacion_id: bodegaId });
+        assert.equal(res.status, 400);
+    });
+
+    test("items asignados a bomberos distintos en la misma solicitud → 400", async () => {
+        const otroBombero = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Otro Bombero" });
+        const otroItem = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ codigo: "DEV-OTRO", categoria: "EPP", descripcion: "De otro bombero" });
+        const acta = await request(app).post("/api/actas-entrega").set(auth(adminToken))
+            .send({ bombero_id: otroBombero.body.id, item_ids: [otroItem.body.id] });
+        await request(app).post(`/api/actas-entrega/${acta.body.id}/confirmar`).set(auth(adminToken))
+            .attach("archivo", Buffer.from("firma"), "firma.jpg");
+
+        const res = await request(app).post("/api/actas-devolucion").set(auth(adminToken))
+            .send({ item_ids: [itemId, otroItem.body.id], ubicacion_id: bodegaId });
+        assert.equal(res.status, 400);
+    });
+
+    test("ubicación de destino inexistente → 404", async () => {
+        const res = await request(app).post("/api/actas-devolucion").set(auth(adminToken))
+            .send({ item_ids: [itemId], ubicacion_id: 999999 });
+        assert.equal(res.status, 404);
+    });
+
+    let actaDevolucionId;
+    test("solicitar devolución genera un acta y NO mueve el item todavía", async () => {
+        const res = await request(app).post("/api/actas-devolucion").set(auth(adminToken))
+            .send({ item_ids: [itemId], ubicacion_id: bodegaId, observacion: "Fin de turno" });
+        assert.equal(res.status, 201);
+        actaDevolucionId = res.body.id;
+
+        const ficha = await request(app).get(`/api/items/${itemId}`).set(auth(adminToken));
+        assert.equal(ficha.body.asignado_bombero_id, bomberoId, "el item sigue con el bombero hasta confirmar");
+        assert.ok(ficha.body.acta_pendiente);
+        assert.equal(ficha.body.acta_pendiente.tipo, "DEVOLUCION");
+        assert.equal(ficha.body.acta_pendiente.ubicacion_destino_nombre, "Bodega Devolución");
+    });
+
+    test("no se puede solicitar una nueva devolución mientras el item ya está en un acta pendiente → 409", async () => {
+        const res = await request(app).post("/api/actas-devolucion").set(auth(adminToken))
+            .send({ item_ids: [itemId], ubicacion_id: bodegaId });
+        assert.equal(res.status, 409);
+    });
+
+    test("el acta de devolución sin firmar se puede descargar como PDF", async () => {
+        const res = await request(app).get(`/api/actas-entrega/${actaDevolucionId}/documento`).set(auth(adminToken));
+        assert.equal(res.status, 200);
+        assert.match(res.headers["content-type"], /pdf/);
+    });
+
+    test("cancelar una devolución pendiente no modifica el item, y se puede reintentar", async () => {
+        const cancel = await request(app).post(`/api/actas-entrega/${actaDevolucionId}/cancelar`).set(auth(adminToken));
+        assert.equal(cancel.status, 200);
+
+        const ficha = await request(app).get(`/api/items/${itemId}`).set(auth(adminToken));
+        assert.equal(ficha.body.asignado_bombero_id, bomberoId);
+        assert.equal(ficha.body.acta_pendiente, null);
+
+        const reintento = await request(app).post("/api/actas-devolucion").set(auth(adminToken))
+            .send({ item_ids: [itemId], ubicacion_id: carroId, ubicacion_detalle: "Gaveta 4" });
+        assert.equal(reintento.status, 201);
+        actaDevolucionId = reintento.body.id;
+    });
+
+    test("confirmar la devolución libera el item y lo ubica en el destino (con gaveta)", async () => {
+        const res = await request(app).post(`/api/actas-entrega/${actaDevolucionId}/confirmar`).set(auth(adminToken))
+            .attach("archivo", Buffer.from("firma devolución"), "firma_devolucion.jpg");
+        assert.equal(res.status, 200);
+
+        const ficha = await request(app).get(`/api/items/${itemId}`).set(auth(adminToken));
+        assert.equal(ficha.body.asignado_bombero_id, null, "ya no está asignado a ningún bombero");
+        assert.equal(ficha.body.ubicacion_actual_id, carroId);
+        assert.equal(ficha.body.ubicacion_detalle, "Gaveta 4");
+        assert.equal(ficha.body.acta_pendiente, null);
+
+        const movs = await request(app).get(`/api/items/${itemId}/movimientos`).set(auth(adminToken));
+        const mov = movs.body.find(m => m.asignacion_id === actaDevolucionId);
+        assert.ok(mov, "debe existir un movimiento ligado al acta de devolución");
+        assert.equal(mov.tipo, "DEVOLUCION");
+        assert.match(mov.desde, /Asignado a Bombero Devolución/);
+        assert.match(mov.hacia, /Carro Devolución/);
+
+        const firmado = await request(app).get(`/api/actas-entrega/${actaDevolucionId}/documento-firmado`).set(auth(adminToken));
+        assert.equal(firmado.status, 200);
+    });
+
+    test("confirmar una devolución ya resuelta → 400", async () => {
+        const res = await request(app).post(`/api/actas-entrega/${actaDevolucionId}/confirmar`).set(auth(adminToken))
+            .attach("archivo", Buffer.from("x"), "otra.jpg");
+        assert.equal(res.status, 400);
+    });
+
+    test("eliminar el item con una devolución confirmada no falla por FK (cascada, borra también el PDF)", async () => {
+        const acta = await request(app).get(`/api/actas-entrega/${actaDevolucionId}/documento`).set(auth(adminToken));
+        assert.equal(acta.status, 200);
+
+        const del = await request(app).delete(`/api/items/${itemId}`).set(auth(adminToken));
+        assert.equal(del.status, 200);
+
+        const rutas = db.prepare("SELECT documento_path, documento_firmado_path FROM acta_entrega WHERE id=?").get(actaDevolucionId);
+        assert.equal(rutas, undefined, "el acta de devolución debe haberse borrado junto al item (sin otros items en el kit)");
+    });
+});
+
 describe("Campo talla", () => {
     test("se puede crear y editar un item con talla, y viaja en la exportación", async () => {
         const crea = await request(app).post("/api/items").set(auth(adminToken))

@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { obtenerBombero } from "../api/bomberos";
 import { listarActasPendientes, abrirDocumento, cancelarActaEntrega } from "../api/actas";
 import EntregaKitModal from "../components/EntregaKitModal";
+import DevolverItemsModal from "../components/DevolverItemsModal";
 import ConfirmarActaModal from "../components/ConfirmarActaModal";
 import { useDialog } from "../context/DialogContext";
 
@@ -26,6 +27,7 @@ export default function FichaBombero() {
   const [error, setError]     = useState("");
   const [actasPendientes, setActasPendientes] = useState([]);
   const [openEntrega, setOpenEntrega] = useState(false);
+  const [openDevolver, setOpenDevolver] = useState(false);
   const [actaAConfirmar, setActaAConfirmar] = useState(null);
   const [procesando, setProcesando] = useState(false);
 
@@ -63,9 +65,14 @@ export default function FichaBombero() {
         <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setOpenEntrega(true)}>
           Entregar equipo
         </button>
+        {bombero.items.length > 0 && (
+          <button className="btn" onClick={() => setOpenDevolver(true)}>
+            Devolver ítems
+          </button>
+        )}
       </div>
 
-      {/* Actas de entrega pendientes de firma */}
+      {/* Actas de entrega o devolución pendientes de firma */}
       {actasPendientes.length > 0 && (
         <div className="stack" style={{ marginBottom: 16 }}>
           {actasPendientes.map((a) => (
@@ -74,6 +81,12 @@ export default function FichaBombero() {
                 <div>
                   <div className="card-title">⏳ Pendiente de firma</div>
                   <div className="card-detail">
+                    {a.tipo === "DEVOLUCION" ? (
+                      <>Devolución solicitada, vuelve a <b>{a.ubicacion_destino_nombre}</b></>
+                    ) : (
+                      <>Entrega solicitada</>
+                    )}
+                    <br />
                     Solicitada el {a.fecha_solicitud} por {a.solicitado_por}
                     <br />
                     Ítems: {a.items.map((it) => it.codigo).join(", ")}
@@ -96,7 +109,10 @@ export default function FichaBombero() {
                     className="btn-danger"
                     disabled={procesando}
                     onClick={async () => {
-                      if (!await confirm("¿Cancelar esta solicitud de entrega? Ningún ítem cambiará de dueño.")) return;
+                      const pregunta = a.tipo === "DEVOLUCION"
+                        ? "¿Cancelar esta solicitud de devolución? Los ítems seguirán asignados al bombero."
+                        : "¿Cancelar esta solicitud de entrega? Ningún ítem cambiará de dueño.";
+                      if (!await confirm(pregunta)) return;
                       try {
                         setProcesando(true);
                         await cancelarActaEntrega(a.id);
@@ -122,6 +138,13 @@ export default function FichaBombero() {
         open={openEntrega}
         onClose={() => setOpenEntrega(false)}
         bomberoFijo={{ id: bombero.id, nombre: bombero.nombre }}
+        onDone={cargar}
+      />
+
+      <DevolverItemsModal
+        open={openDevolver}
+        onClose={() => setOpenDevolver(false)}
+        bombero={{ id: bombero.id, nombre: bombero.nombre }}
         onDone={cargar}
       />
 

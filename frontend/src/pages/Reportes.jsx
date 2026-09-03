@@ -162,22 +162,28 @@ export default function Reportes() {
         </div>
       )}
 
-      {/* ACTAS DE ENTREGA PENDIENTES DE FIRMA */}
+      {/* ACTAS DE ENTREGA Y DEVOLUCIÓN PENDIENTES DE FIRMA */}
       <div className="spread" style={{ marginBottom: 10 }}>
-        <h3>Actas de entrega pendientes de firma</h3>
+        <h3>Actas pendientes de firma</h3>
         {pendientesFirma.length > 0 && (
           <span className="badge-warning">{pendientesFirma.length} pendiente{pendientesFirma.length !== 1 ? "s" : ""}</span>
         )}
       </div>
       {pendientesFirma.length === 0 ? (
-        <p className="muted" style={{ marginBottom: 20 }}>No hay actas de entrega esperando firma.</p>
+        <p className="muted" style={{ marginBottom: 20 }}>No hay actas esperando firma.</p>
       ) : (
         <div className="stack" style={{ marginBottom: 20 }}>
           {pendientesFirma.map((p) => (
             <div key={p.id} className="card card--pendiente-firma">
               <div className="spread">
                 <div>
-                  <div className="item-desc" style={{ marginLeft: 0 }}>Para <b>{p.bombero_nombre}</b></div>
+                  <div className="item-desc" style={{ marginLeft: 0 }}>
+                    {p.tipo === "DEVOLUCION" ? (
+                      <>Devolución de <b>{p.bombero_nombre}</b>, vuelve a <b>{p.ubicacion_destino_nombre}</b></>
+                    ) : (
+                      <>Entrega para <b>{p.bombero_nombre}</b></>
+                    )}
+                  </div>
                   <div className="item-tipo">
                     {p.items.map((it) => (
                       <Link key={it.id} to={`/items/${it.id}`} style={{ textDecoration: "none" }}>

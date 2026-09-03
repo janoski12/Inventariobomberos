@@ -322,13 +322,17 @@ router.get("/items/:id", (req, res) => {
 
     if (!row) return res.status(404).json({ error: "Item no encontrado" });
 
-    // Acta de entrega pendiente de firma que incluye este item, si la hay
-    // (bloquea nuevas solicitudes sobre el mismo item; puede incluir otros items del mismo kit)
+    // Acta (entrega o devolución) pendiente de firma que incluye este item, si
+    // la hay (bloquea nuevas solicitudes sobre el mismo item; puede incluir
+    // otros items del mismo kit). ubicacion_destino_* solo viene informado en
+    // las de tipo DEVOLUCION.
     const acta = db.prepare(`
-        SELECT ae.id, ae.observacion, ae.solicitado_por, ae.fecha_solicitud, b.nombre AS bombero_nombre
+        SELECT ae.id, ae.tipo, ae.observacion, ae.solicitado_por, ae.fecha_solicitud, b.nombre AS bombero_nombre,
+               ae.ubicacion_destino_id, ud.nombre AS ubicacion_destino_nombre, ae.ubicacion_destino_detalle
         FROM acta_entrega_item ai
         JOIN acta_entrega ae ON ae.id = ai.acta_id
         JOIN bombero b ON b.id = ae.bombero_id
+        LEFT JOIN ubicacion ud ON ud.id = ae.ubicacion_destino_id
         WHERE ai.item_id = ? AND ae.estado = 'PENDIENTE'
     `).get(id);
     row.acta_pendiente = acta ? { ...acta, items: itemsDeActa(acta.id) } : null;
