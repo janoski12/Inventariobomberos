@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { crearItem, obtenerSubcategorias, obtenerMarcas, obtenerModelos } from "../api/items";
+import { crearItem, obtenerProximoCodigo, obtenerSubcategorias, obtenerMarcas, obtenerModelos } from "../api/items";
 import { solicitarActaEntrega, abrirDocumento } from "../api/actas";
 import { useDialog } from "../context/DialogContext";
 import { listarBomberos } from "../api/bomberos";
@@ -18,6 +18,7 @@ export default function NuevoItem() {
   const [optsSubcat, setOptsSubcat] = useState([]);
   const [optsMarca, setOptsMarca]   = useState([]);
   const [optsModelo, setOptsModelo] = useState([]);
+  const [cargandoCodigo, setCargandoCodigo] = useState(true);
 
   const [form, setForm] = useState({
     codigo: "",
@@ -55,6 +56,16 @@ export default function NuevoItem() {
     setForm(p => ({ ...p, subcategoria: "" }));
   }, [form.categoria]);
 
+  // El código lo asigna el sistema (correlativo por categoría: EPP-0001...);
+  // esto es solo una vista previa, se recalcula de nuevo al guardar.
+  useEffect(() => {
+    setCargandoCodigo(true);
+    obtenerProximoCodigo(form.categoria)
+      .then((data) => setForm((p) => ({ ...p, codigo: data.codigo })))
+      .catch(() => setForm((p) => ({ ...p, codigo: "" })))
+      .finally(() => setCargandoCodigo(false));
+  }, [form.categoria]);
+
   useEffect(() => {
     obtenerModelos(form.marca).catch(() => []).then(setOptsModelo);
   }, [form.marca]);
@@ -63,7 +74,7 @@ export default function NuevoItem() {
   const esCarro = ubicacionSeleccionada?.tipo === "CARRO";
 
   const puedeGuardar =
-    form.codigo.trim() &&
+    !cargandoCodigo &&
     form.descripcion.trim() &&
     ((form.modo === "ASIGNAR" && form.bombero_id) ||
       (form.modo === "UBICAR" && form.ubicacion_id));
@@ -74,7 +85,6 @@ export default function NuevoItem() {
     try {
       setGuardando(true);
       const payload = {
-        codigo: form.codigo.trim(),
         categoria: form.categoria,
         subcategoria: form.subcategoria.trim() || null,
         descripcion: form.descripcion.trim(),
@@ -130,9 +140,10 @@ export default function NuevoItem() {
             Código
             <input
               className="input"
-              value={form.codigo}
-              onChange={campo("codigo")}
-              placeholder="Ej: EPP-0001"
+              value={cargandoCodigo ? "Generando..." : form.codigo}
+              readOnly
+              disabled
+              title="Lo asigna el sistema según la categoría"
             />
           </label>
 

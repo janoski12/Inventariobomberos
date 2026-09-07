@@ -139,10 +139,30 @@ describe("CRUD y validaciones de ítems", () => {
         assert.equal(res.status, 201);
     });
 
-    test("código duplicado → 409", async () => {
+    test("el código lo genera el sistema: ignora cualquier valor enviado", async () => {
         const res = await request(app).post("/api/items").set(auth(adminToken))
-            .send({ codigo: "TEST-001", categoria: "EPP", descripcion: "Duplicado" });
-        assert.equal(res.status, 409);
+            .send({ codigo: "LO-QUE-SEA", categoria: "EPP", descripcion: "Ignora el código enviado" });
+        assert.equal(res.status, 201);
+        assert.notEqual(res.body.codigo, "LO-QUE-SEA");
+        assert.match(res.body.codigo, /^EPP-\d{4}$/);
+    });
+
+    test("el código sigue una secuencia propia por categoría, coincide con la vista previa", async () => {
+        const preview = await request(app).get("/api/items/meta/proximo-codigo?categoria=TRAUMA").set(auth(adminToken));
+        assert.equal(preview.status, 200);
+        assert.match(preview.body.codigo, /^TRM-\d{4}$/);
+
+        const creado = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ categoria: "TRAUMA", descripcion: "Botiquín para probar la secuencia" });
+        assert.equal(creado.body.codigo, preview.body.codigo);
+
+        const siguiente = await request(app).get("/api/items/meta/proximo-codigo?categoria=TRAUMA").set(auth(adminToken));
+        assert.notEqual(siguiente.body.codigo, preview.body.codigo, "el próximo disponible ya avanzó");
+    });
+
+    test("vista previa del código con categoría inválida → 400", async () => {
+        const res = await request(app).get("/api/items/meta/proximo-codigo?categoria=INVENTADA").set(auth(adminToken));
+        assert.equal(res.status, 400);
     });
 
     test("categoría inválida → 400", async () => {
@@ -288,15 +308,17 @@ describe("Cambio de contraseña propio", () => {
 });
 
 describe("Entrega de kit (uno o varios items) con acta de recepción", () => {
-    let item1Id, item2Id, bomberoId, actaId;
+    let item1Id, item2Id, item1Codigo, item2Codigo, bomberoId, actaId;
 
     test("crear items y bombero de prueba", async () => {
         const i1 = await request(app).post("/api/items").set(auth(adminToken))
-            .send({ codigo: "ACTA-001", categoria: "EPP", descripcion: "Casco acta", talla: "" });
+            .send({ categoria: "EPP", descripcion: "Casco acta", talla: "" });
         const i2 = await request(app).post("/api/items").set(auth(adminToken))
-            .send({ codigo: "ACTA-002", categoria: "EPP", descripcion: "Chaqueta acta", talla: "S" });
+            .send({ categoria: "EPP", descripcion: "Chaqueta acta", talla: "S" });
         item1Id = i1.body.id;
         item2Id = i2.body.id;
+        item1Codigo = i1.body.codigo;
+        item2Codigo = i2.body.codigo;
         const bom = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero Acta" });
         bomberoId = bom.body.id;
     });
@@ -316,7 +338,7 @@ describe("Entrega de kit (uno o varios items) con acta de recepción", () => {
         assert.equal(ficha1.body.acta_pendiente.items.length, 2, "la ficha muestra el kit completo, no solo este item");
         assert.deepEqual(
             ficha1.body.acta_pendiente.items.map(i => i.codigo).sort(),
-            ["ACTA-001", "ACTA-002"]
+            [item1Codigo, item2Codigo].sort()
         );
     });
 
@@ -559,7 +581,7 @@ describe("Importación parcial de ítems", () => {
 
         const bom = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero Importa" });
         const item = await request(app).post("/api/items").set(auth(adminToken))
-            .send({ codigo: "IMP-001", categoria: "EPP", descripcion: "Casco importado" });
+            .send({ categoria: "EPP", descripcion: "Casco importado" });
         assert.equal(item.status, 201);
 
         // La asignación, incluso para el setup del test, pasa por el acta de entrega
@@ -568,9 +590,10 @@ describe("Importación parcial de ítems", () => {
         await request(app).post(`/api/actas-entrega/${acta.body.id}/confirmar`).set(auth(adminToken))
             .attach("archivo", Buffer.from("firma"), "firma.jpg");
 
-        // Excel con el mismo código pero ubicación/bombero vacíos (caso típico de re-importación)
+        // Excel con el mismo código (el que generó el sistema al crearlo) pero
+        // ubicación/bombero vacíos (caso típico de re-importación)
         const filas = [{
-            codigo: "IMP-001", categoria: "EPP", subcategoria: "", descripcion: "Casco importado v2",
+            codigo: item.body.codigo, categoria: "EPP", subcategoria: "", descripcion: "Casco importado v2",
             marca: "", modelo: "", serie: "", estado: "OPERATIVO", criticidad: "ALTA",
             ubicacion_nombre: "", bombero_nombre: "",
             fecha_fabricacion: "", fecha_recepcion: "", fecha_vencimiento: "",

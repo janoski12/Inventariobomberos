@@ -1,6 +1,6 @@
 const router = require("express").Router();
 const db = require("../db");
-const { ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, isNil, cleanText, badRequest, notFound, conflict, serverError, esFechaValida, fechaLocalISO, descripcionOrigenItem } = require("../lib/helpers");
+const { ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, isNil, cleanText, badRequest, notFound, conflict, serverError, esFechaValida, fechaLocalISO, descripcionOrigenItem, siguienteCodigoItem } = require("../lib/helpers");
 const { quienRegistra } = require("../lib/auth");
 const { itemsDeActa } = require("./actas");
 const { borrarSiExiste } = require("../lib/documentos");
@@ -8,7 +8,9 @@ const { borrarSiExiste } = require("../lib/documentos");
 //Crear items
 router.post("/items", (req, res) => {
     try {
-        const codigo            = cleanText(req.body.codigo);
+        // El código lo asigna el sistema (ver GET /items/meta/proximo-codigo
+        // para la vista previa); cualquier valor que venga en el body se
+        // ignora, para que no se puedan crear códigos duplicados o inválidos.
         const categoria         = cleanText(req.body.categoria);
         const subcategoria      = cleanText(req.body.subcategoria);
         const descripcion       = cleanText(req.body.descripcion);
@@ -23,7 +25,6 @@ router.post("/items", (req, res) => {
         const ubicacion_actual_id = isNil(req.body.ubicacion_actual_id) ? null : Number(req.body.ubicacion_actual_id);
         const ubicacion_detalle   = cleanText(req.body.ubicacion_detalle);
 
-        if (!codigo) return badRequest(res, "codigo es requerido");
         if (!categoria) return badRequest(res, "categoria es requerida");
         if (!descripcion) return badRequest(res, "descripcion es requerida");
 
@@ -59,7 +60,11 @@ router.post("/items", (req, res) => {
             if (!ubicacion) return notFound(res, "Ubicacion no encontrada");
         }
 
-        const nuevoId = db.transaction(() => {
+        const { itemId, codigo } = db.transaction(() => {
+            // Se recalcula recién aquí, dentro de la transacción, para no
+            // repetir un código con una creación simultánea de la misma categoría.
+            const codigo = siguienteCodigoItem(categoria);
+
             const info = db.prepare(`
                 INSERT INTO item (codigo, categoria, subcategoria, descripcion, marca, modelo, serie, talla, estado, criticidad, ubicacion_actual_id, ubicacion_detalle, fecha_fabricacion)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -73,10 +78,10 @@ router.post("/items", (req, res) => {
                 VALUES (?, 'CREACION', 'Nuevo item', ?, ?, NULL, datetime('now','localtime'))
             `).run(itemId, hacia, quienRegistra(req));
 
-            return itemId;
+            return { itemId, codigo };
         })();
 
-        res.status(201).json({ id: nuevoId });
+        res.status(201).json({ id: itemId, codigo });
     } catch (e) {
         if (String(e).includes("UNIQUE")) {
             return conflict(res, "El código del item ya existe");
@@ -284,6 +289,15 @@ router.get("/items/exportar", (req, res) => {
     } catch (e) { return serverError(res, e, "Error exportando inventario"); }
 });
 
+// Vista previa del código que el sistema le asignaría a un item nuevo de esta
+// categoría (el valor real se recalcula al momento de guardar en POST /items)
+router.get("/items/meta/proximo-codigo", (req, res) => {
+    const categoria = cleanText(req.query.categoria);
+    if (!categoria || !CATEGORIAS.includes(categoria))
+        return badRequest(res, `categoria inválida. Use: ${CATEGORIAS.join(", ")}`);
+    res.json({ codigo: siguienteCodigoItem(categoria) });
+});
+
 // Metadatos para dropdowns creativos
 router.get("/items/meta/subcategorias", (req, res) => {
     const { categoria } = req.query;
@@ -341,8 +355,10 @@ router.get("/items/:id", (req, res) => {
 });
 
 // La entrega a bombero (uno o varios items) pasa por el acta de recepcion + firma:
-// ver POST /actas-entrega y POST /actas-entrega/:id/confirmar en routes/actas.js
-
+// ver POST /actas-entrega y POST /actas-entrega/:id/confirmar en routes/actas.js.
+// El acta es EXCLUSIVA de la entrega a bombero. Mover un item a una ubicacion
+// (endpoint de abajo) es inmediato: no genera acta ni requiere firma, para no
+// confundir "ubicar" con "entregar".
 router.post("/items/:id/mover", (req, res) => {
     try {
         const id = Number(req.params.id);

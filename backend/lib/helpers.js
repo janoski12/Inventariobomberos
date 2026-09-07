@@ -15,6 +15,16 @@ const ESTADOS_ASIGNACION = ["PENDIENTE", "CONFIRMADA", "CANCELADA"];
 const RESULTADOS_REVISION = ["OK", "FALLA", "FALTANTE"];
 const EXT_DOCUMENTO      = { pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png" };
 
+// Prefijo del código de item según su categoría (mismo esquema que ya usan
+// los datos de ejemplo y las plantillas de importación: EPP-0001, TRM-0001...)
+const PREFIJO_CODIGO_ITEM = {
+    EPP: "EPP",
+    TRAUMA: "TRM",
+    HERRAMIENTA: "HRR",
+    COMUNICACION: "COM",
+    OTRO: "OTR",
+};
+
 // Contraseña temporal aleatoria para usuarios nuevos (o al resetear la de
 // otro usuario): 10 caracteres, sin 0/O/1/l/I para que no se preste a
 // confusión al transcribirla a mano o dictarla por teléfono.
@@ -115,6 +125,24 @@ function descripcionOrigenItem(item) {
     return "Sin asignación";
 }
 
+// Próximo código disponible para un item de esta categoría: PREFIJO-0001,
+// PREFIJO-0002... La numeración es propia de cada categoría y se calcula
+// como el mayor número ya usado + 1 (no un conteo), para no repetirse aunque
+// se hayan borrado items intermedios. Se recalcula en el momento de insertar
+// (no solo al mostrar la vista previa) para no colisionar con creaciones
+// simultáneas.
+function siguienteCodigoItem(categoria) {
+    const prefijo = PREFIJO_CODIGO_ITEM[categoria] ?? "OTR";
+    const filas = db.prepare("SELECT codigo FROM item WHERE codigo LIKE ?").all(`${prefijo}-%`);
+    const patron = new RegExp(`^${prefijo}-(\\d+)$`);
+    let maximo = 0;
+    for (const { codigo } of filas) {
+        const m = codigo.match(patron);
+        if (m) maximo = Math.max(maximo, Number(m[1]));
+    }
+    return `${prefijo}-${String(maximo + 1).padStart(4, "0")}`;
+}
+
 // Valida el archivo subido como acta de entrega firmada (foto o escaneo)
 function parseDocumentoBuffer(req, res) {
     if (!req.file) { badRequest(res, "Debes subir el documento firmado"); return null; }
@@ -129,5 +157,5 @@ module.exports = {
     TIPOS_CONTROL, RESULTADOS_CONTROL, ESTADOS_ASIGNACION, RESULTADOS_REVISION,
     isNil, cleanText, badRequest, notFound, conflict, serverError, generarPasswordTemporal,
     normXlsx, normFechaXlsx, parseXlsxBuffer, esFechaValida, fechaLocalISO, parseDocumentoBuffer,
-    descripcionOrigenItem,
+    descripcionOrigenItem, siguienteCodigoItem,
 };

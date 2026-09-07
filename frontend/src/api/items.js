@@ -79,6 +79,12 @@ export async function exportarItems({ q = "", estado = "", categoria = "", criti
   setTimeout(() => URL.revokeObjectURL(url), 100);
 }
 
+// Vista previa del código que el sistema le asignaría a un item nuevo de esta
+// categoría (PREFIJO-0001...); el valor real se recalcula al guardar (POST /items).
+export function obtenerProximoCodigo(categoria) {
+  return request(`${API_URL}/items/meta/proximo-codigo?categoria=${encodeURIComponent(categoria)}`);
+}
+
 export function obtenerSubcategorias(categoria) {
   const qs = categoria ? `?categoria=${encodeURIComponent(categoria)}` : "";
   return request(`${API_URL}/items/meta/subcategorias${qs}`);
