@@ -4,6 +4,9 @@ const PDFDocument = require("pdfkit");
 
 const DOCS_DIR = path.join(path.dirname(process.env.DB_PATH || path.join(__dirname, "..", "data", "x")), "documentos");
 const ESCUDO_PATH = path.join(__dirname, "..", "assets", "escudo.png");
+// Timbre + firma del Capitán, pre-impresos en el acta (no requiere que el
+// Capitán firme cada una a mano): ver assets/firma_capitan.png
+const FIRMA_CAPITAN_PATH = path.join(__dirname, "..", "assets", "firma_capitan.png");
 
 const MARGEN = 56;
 const ANCHO_UTIL = 612 - MARGEN * 2; // Letter
@@ -136,14 +139,35 @@ function generarActaEntrega(id, { tipo = "ENTREGA", bombero, items, solicitadoPo
             MARGEN, doc.y, { width: ANCHO_UTIL, align: "justify" }
         );
 
-        // ── Firmas ──
-        doc.moveDown(5);
+        // ── Firmas: Voluntario, Teniente que entrega/recibe, y Capitán ──
+        // El Capitán no firma cada acta a mano: su timbre y firma quedan
+        // pre-impresos (ver FIRMA_CAPITAN_PATH); las otras dos van en blanco,
+        // para firmar al imprimir.
+        doc.moveDown(6);
         const yFirma = doc.y;
-        const anchoFirma = (ANCHO_UTIL - 30) / 2;
-        doc.moveTo(MARGEN, yFirma).lineTo(MARGEN + anchoFirma, yFirma).stroke();
-        doc.moveTo(MARGEN + anchoFirma + 30, yFirma).lineTo(MARGEN + anchoFirma * 2 + 30, yFirma).stroke();
-        doc.fontSize(9).text(esDevolucion ? "Firma del Voluntario que devuelve" : "Firma del Voluntario que recibe", MARGEN, yFirma + 4, { width: anchoFirma, align: "center" });
-        doc.text("Firma Capitán de Compañía", MARGEN + anchoFirma + 30, yFirma + 4, { width: anchoFirma, align: "center" });
+        const GAP_FIRMA = 16;
+        const anchoFirma = (ANCHO_UTIL - GAP_FIRMA * 2) / 3;
+        const xVoluntario = MARGEN;
+        const xTeniente = MARGEN + anchoFirma + GAP_FIRMA;
+        const xCapitan = MARGEN + (anchoFirma + GAP_FIRMA) * 2;
+
+        const tieneFirmaCapitan = fs.existsSync(FIRMA_CAPITAN_PATH);
+        if (tieneFirmaCapitan) {
+            try {
+                doc.image(FIRMA_CAPITAN_PATH, xCapitan, yFirma - 46, {
+                    fit: [anchoFirma, 42], align: "center", valign: "bottom",
+                });
+            } catch { /* imagen invalida, se omite */ }
+        }
+
+        [xVoluntario, xTeniente, xCapitan].forEach((x) => {
+            doc.moveTo(x, yFirma).lineTo(x + anchoFirma, yFirma).stroke();
+        });
+
+        doc.fontSize(9);
+        doc.text(esDevolucion ? "Firma del Voluntario que devuelve" : "Firma del Voluntario que recibe", xVoluntario, yFirma + 4, { width: anchoFirma, align: "center" });
+        doc.text(esDevolucion ? "Firma Teniente que recibe" : "Firma Teniente que entrega", xTeniente, yFirma + 4, { width: anchoFirma, align: "center" });
+        doc.text("Firma Capitán de Compañía", xCapitan, yFirma + 4, { width: anchoFirma, align: "center" });
 
         // ── Pie institucional ──
         // Sin esto, pdfkit interpreta que el texto no cabe antes del margen inferior
