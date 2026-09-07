@@ -143,7 +143,7 @@ function generarActaEntrega(id, { tipo = "ENTREGA", bombero, items, solicitadoPo
         // El Capitán no firma cada acta a mano: su timbre y firma quedan
         // pre-impresos (ver FIRMA_CAPITAN_PATH); las otras dos van en blanco,
         // para firmar al imprimir.
-        doc.moveDown(6);
+        doc.moveDown(7);
         const yFirma = doc.y;
         const GAP_FIRMA = 16;
         const anchoFirma = (ANCHO_UTIL - GAP_FIRMA * 2) / 3;
@@ -154,8 +154,8 @@ function generarActaEntrega(id, { tipo = "ENTREGA", bombero, items, solicitadoPo
         const tieneFirmaCapitan = fs.existsSync(FIRMA_CAPITAN_PATH);
         if (tieneFirmaCapitan) {
             try {
-                doc.image(FIRMA_CAPITAN_PATH, xCapitan, yFirma - 46, {
-                    fit: [anchoFirma, 42], align: "center", valign: "bottom",
+                doc.image(FIRMA_CAPITAN_PATH, xCapitan, yFirma - 88, {
+                    fit: [anchoFirma - 10, 84], align: "center", valign: "bottom",
                 });
             } catch { /* imagen invalida, se omite */ }
         }
