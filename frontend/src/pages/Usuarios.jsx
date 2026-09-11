@@ -3,6 +3,7 @@ import { listarUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario } from
 import { useAuth } from "../context/AuthContext";
 import { useDialog } from "../context/DialogContext";
 import Modal from "../components/Modal";
+import { copiarAlPortapapeles } from "../utils/clipboard";
 
 const ROLES = ["ADMIN", "OPERADOR"];
 const FORM_VACIO = { username: "", nombre: "", rol: "OPERADOR" };
@@ -103,9 +104,13 @@ export default function Usuarios() {
     });
   }
 
-  function copiarPasswordTemporal() {
-    navigator.clipboard?.writeText(tempInfo.password).catch(() => {});
-    toast("Copiada al portapapeles", "success");
+  async function copiarPasswordTemporal() {
+    try {
+      await copiarAlPortapapeles(tempInfo.password);
+      toast("Copiada al portapapeles", "success");
+    } catch {
+      toast("No se pudo copiar. Selecciona la contraseña y cópiala manualmente (Ctrl+C).");
+    }
   }
 
   const puedeGuardar = !!form.username.trim();
