@@ -722,6 +722,71 @@ describe("Módulo Carros y revisión pública", () => {
     });
 });
 
+describe("Sub-filtro de gaveta al buscar dentro de un carro", () => {
+    let carroId, itemGaveta1Id, itemGaveta2Id, itemSinGavetaId;
+
+    test("preparar carro con items en distintas gavetas", async () => {
+        const carro = await request(app).post("/api/ubicaciones").set(auth(adminToken))
+            .send({ nombre: "Carro Gavetas Test", tipo: "CARRO" });
+        carroId = carro.body.id;
+
+        const i1 = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ categoria: "EPP", descripcion: "Casco en gaveta 1", ubicacion_actual_id: carroId, ubicacion_detalle: "Gaveta 1" });
+        const i2 = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ categoria: "COMUNICACION", descripcion: "Radio en gaveta 2", ubicacion_actual_id: carroId, ubicacion_detalle: "Gaveta 2" });
+        const i3 = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ categoria: "HERRAMIENTA", descripcion: "Herramienta sin gaveta asignada", ubicacion_actual_id: carroId });
+        itemGaveta1Id = i1.body.id;
+        itemGaveta2Id = i2.body.id;
+        itemSinGavetaId = i3.body.id;
+    });
+
+    test("GET /items/meta/gavetas lista solo las gavetas realmente en uso en ese carro", async () => {
+        const res = await request(app).get(`/api/items/meta/gavetas?ubicacion_id=${carroId}`).set(auth(adminToken));
+        assert.equal(res.status, 200);
+        assert.deepEqual(res.body, ["Gaveta 1", "Gaveta 2"]);
+    });
+
+    test("GET /items/meta/gavetas con ubicacion_id inválido → 400", async () => {
+        const res = await request(app).get("/api/items/meta/gavetas?ubicacion_id=abc").set(auth(adminToken));
+        assert.equal(res.status, 400);
+    });
+
+    test("GET /items filtrando por ubicacion_id + ubicacion_detalle trae solo esa gaveta", async () => {
+        const res = await request(app).get(`/api/items?ubicacion_id=${carroId}&ubicacion_detalle=${encodeURIComponent("Gaveta 1")}`).set(auth(adminToken));
+        assert.equal(res.status, 200);
+        assert.deepEqual(res.body.map(i => i.id), [itemGaveta1Id]);
+    });
+
+    test("GET /items sin el sub-filtro de gaveta sigue trayendo todo el carro", async () => {
+        const res = await request(app).get(`/api/items?ubicacion_id=${carroId}`).set(auth(adminToken));
+        assert.equal(res.status, 200);
+        assert.deepEqual(
+            res.body.map(i => i.id).sort(),
+            [itemGaveta1Id, itemGaveta2Id, itemSinGavetaId].sort()
+        );
+    });
+
+    test("GET /items/exportar respeta el sub-filtro de gaveta e incluye la columna Gaveta/Detalle", async () => {
+        const xlsx = require("xlsx");
+        // supertest no trae un parser para xlsx: hay que juntar los bytes crudos
+        // a mano para poder leer el archivo (si no, res.body llega vacío).
+        const res = await request(app).get(`/api/items/exportar?ubicacion_id=${carroId}&ubicacion_detalle=${encodeURIComponent("Gaveta 2")}`)
+            .set(auth(adminToken))
+            .buffer(true)
+            .parse((res, cb) => {
+                const chunks = [];
+                res.on("data", (c) => chunks.push(c));
+                res.on("end", () => cb(null, Buffer.concat(chunks)));
+            });
+        assert.equal(res.status, 200);
+        const wb = xlsx.read(res.body, { type: "buffer" });
+        const filas = xlsx.utils.sheet_to_json(wb.Sheets["Inventario"]);
+        assert.equal(filas.length, 1);
+        assert.equal(filas[0]["Gaveta/Detalle"], "Gaveta 2");
+    });
+});
+
 describe("Limpieza de PDFs huérfanos al eliminar item/bombero", () => {
     test("borrar el único item de un acta borra tambien el acta y su PDF del disco", async () => {
         const bom = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero PDF 1" });

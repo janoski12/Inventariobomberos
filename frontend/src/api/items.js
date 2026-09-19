@@ -15,14 +15,15 @@ const json = (payload) => ({
   body: JSON.stringify(payload),
 });
 
-export function buscarItems({ q = "", estado = "", categoria = "", criticidad = "", bombero_id = "", ubicacion_id = "" } = {}) {
+export function buscarItems({ q = "", estado = "", categoria = "", criticidad = "", bombero_id = "", ubicacion_id = "", ubicacion_detalle = "" } = {}) {
   const params = new URLSearchParams();
-  if (q?.trim())    params.set("q",           q.trim());
-  if (estado)       params.set("estado",       estado);
-  if (categoria)    params.set("categoria",    categoria);
-  if (criticidad)   params.set("criticidad",   criticidad);
-  if (bombero_id)   params.set("bombero_id",   bombero_id);
-  if (ubicacion_id) params.set("ubicacion_id", ubicacion_id);
+  if (q?.trim())        params.set("q",                q.trim());
+  if (estado)           params.set("estado",            estado);
+  if (categoria)        params.set("categoria",         categoria);
+  if (criticidad)       params.set("criticidad",        criticidad);
+  if (bombero_id)       params.set("bombero_id",        bombero_id);
+  if (ubicacion_id)     params.set("ubicacion_id",      ubicacion_id);
+  if (ubicacion_detalle)params.set("ubicacion_detalle", ubicacion_detalle);
   const qs = params.toString();
   return request(`${API_URL}/items${qs ? `?${qs}` : ""}`);
 }
@@ -55,14 +56,15 @@ export function eliminarItem(id) {
   return request(`${API_URL}/items/${id}`, { method: "DELETE" });
 }
 
-export async function exportarItems({ q = "", estado = "", categoria = "", criticidad = "", bombero_id = "", ubicacion_id = "" } = {}) {
+export async function exportarItems({ q = "", estado = "", categoria = "", criticidad = "", bombero_id = "", ubicacion_id = "", ubicacion_detalle = "" } = {}) {
   const params = new URLSearchParams();
-  if (q?.trim())    params.set("q",           q.trim());
-  if (estado)       params.set("estado",       estado);
-  if (categoria)    params.set("categoria",    categoria);
-  if (criticidad)   params.set("criticidad",   criticidad);
-  if (bombero_id)   params.set("bombero_id",   bombero_id);
-  if (ubicacion_id) params.set("ubicacion_id", ubicacion_id);
+  if (q?.trim())        params.set("q",                q.trim());
+  if (estado)           params.set("estado",            estado);
+  if (categoria)        params.set("categoria",         categoria);
+  if (criticidad)       params.set("criticidad",        criticidad);
+  if (bombero_id)       params.set("bombero_id",        bombero_id);
+  if (ubicacion_id)     params.set("ubicacion_id",      ubicacion_id);
+  if (ubicacion_detalle)params.set("ubicacion_detalle", ubicacion_detalle);
   const qs = params.toString();
   const res = await fetch(`${API_URL}/items/exportar${qs ? `?${qs}` : ""}`);
   if (!res.ok) throw new Error(`Error ${res.status}`);
@@ -83,6 +85,12 @@ export async function exportarItems({ q = "", estado = "", categoria = "", criti
 // categoría (PREFIJO-0001...); el valor real se recalcula al guardar (POST /items).
 export function obtenerProximoCodigo(categoria) {
   return request(`${API_URL}/items/meta/proximo-codigo?categoria=${encodeURIComponent(categoria)}`);
+}
+
+// Gavetas/compartimientos en uso dentro de esa ubicación (para el sub-filtro
+// que aparece al elegir un carro en la búsqueda)
+export function obtenerGavetas(ubicacion_id) {
+  return request(`${API_URL}/items/meta/gavetas?ubicacion_id=${encodeURIComponent(ubicacion_id)}`);
 }
 
 export function obtenerSubcategorias(categoria) {
