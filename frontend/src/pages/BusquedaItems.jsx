@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { buscarItems, exportarItems } from "../api/items";
+import { buscarItems, exportarItems, obtenerGavetas } from "../api/items";
 import { obtenerReportes } from "../api/reportes";
 import { useDialog } from "../context/DialogContext";
 import { listarBomberos } from "../api/bomberos";
@@ -34,16 +34,34 @@ export default function BusquedaItems() {
     const [ubicaciones, setUbicaciones]           = useState([]);
     const [filtroBombero, setFiltroBombero]       = useState("");
     const [filtroUbicacion, setFiltroUbicacion]   = useState("");
+    const [filtroGaveta, setFiltroGaveta]         = useState("");
+    const [gavetas, setGavetas]                   = useState([]);
     const navigate = useNavigate();
 
     const debouncedQ = useDebounce(q, 300);
-    const hayFiltros = filtroEstado || filtroCategoria || filtroCriticidad || filtroBombero || filtroUbicacion;
+    const hayFiltros = filtroEstado || filtroCategoria || filtroCriticidad || filtroBombero || filtroUbicacion || filtroGaveta;
+
+    const ubicacionSeleccionada = ubicaciones.find((u) => String(u.id) === String(filtroUbicacion));
+    const esCarroSeleccionado = ubicacionSeleccionada?.tipo === "CARRO";
 
     useEffect(() => {
         obtenerReportes().then(setStats).catch(() => {});
         listarBomberos().then(setBomberos).catch(() => {});
         listarUbicaciones().then(setUbicaciones).catch(() => {});
     }, []);
+
+    // El sub-filtro de gaveta solo tiene sentido dentro de un carro: se puebla
+    // con las gavetas que de verdad tienen ítems ahí, y se limpia si se elige
+    // otra ubicación (o ninguna).
+    useEffect(() => {
+        if (!esCarroSeleccionado) {
+            setGavetas([]);
+            setFiltroGaveta("");
+            return;
+        }
+        obtenerGavetas(filtroUbicacion).catch(() => []).then(setGavetas);
+        setFiltroGaveta("");
+    }, [filtroUbicacion, esCarroSeleccionado]);
 
     useEffect(() => {
         let cancelado = false;
@@ -58,6 +76,7 @@ export default function BusquedaItems() {
                     criticidad:  filtroCriticidad,
                     bombero_id:  filtroBombero,
                     ubicacion_id:filtroUbicacion,
+                    ubicacion_detalle: filtroGaveta,
                 });
                 if (!cancelado) setItems(data);
             } catch {
@@ -68,7 +87,7 @@ export default function BusquedaItems() {
         }
         run();
         return () => { cancelado = true; };
-    }, [debouncedQ, filtroEstado, filtroCategoria, filtroCriticidad, filtroBombero, filtroUbicacion]);
+    }, [debouncedQ, filtroEstado, filtroCategoria, filtroCriticidad, filtroBombero, filtroUbicacion, filtroGaveta]);
 
     function limpiarFiltros() {
         setFiltroEstado("");
@@ -76,6 +95,7 @@ export default function BusquedaItems() {
         setFiltroCriticidad("");
         setFiltroBombero("");
         setFiltroUbicacion("");
+        setFiltroGaveta("");
     }
 
     const resumen = useMemo(() => {
@@ -190,6 +210,17 @@ export default function BusquedaItems() {
                     {ubicaciones.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
                 </select>
 
+                {esCarroSeleccionado && gavetas.length > 0 && (
+                    <select
+                        className={`filtro-select${filtroGaveta ? " filtro-activo" : ""}`}
+                        value={filtroGaveta}
+                        onChange={(e) => setFiltroGaveta(e.target.value)}
+                    >
+                        <option value="">Todas las gavetas</option>
+                        {gavetas.map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                )}
+
                 {hayFiltros && (
                     <button className="btn-clear-filtros" onClick={limpiarFiltros}>
                         Limpiar filtros
@@ -205,7 +236,7 @@ export default function BusquedaItems() {
                     onClick={async () => {
                         try {
                             setExportando(true);
-                            await exportarItems({ q: debouncedQ, estado: filtroEstado, categoria: filtroCategoria, criticidad: filtroCriticidad, bombero_id: filtroBombero, ubicacion_id: filtroUbicacion });
+                            await exportarItems({ q: debouncedQ, estado: filtroEstado, categoria: filtroCategoria, criticidad: filtroCriticidad, bombero_id: filtroBombero, ubicacion_id: filtroUbicacion, ubicacion_detalle: filtroGaveta });
                         } catch { toast("No se pudo exportar. Revisa que el backend esté activo."); }
                         finally { setExportando(false); }
                     }}

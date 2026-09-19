@@ -32,6 +32,9 @@ export default function ItemCard({ item, onClick }) {
                 <span>{item.categoria ?? "—"}</span>
                 {" · "}
                 <span>{item.ubicacion_nombre ?? item.bombero_nombre ?? "Sin ubicar"}</span>
+                {item.ubicacion_detalle && (
+                    <span className="muted"> · {item.ubicacion_detalle}</span>
+                )}
             </div>
         </div>
     );

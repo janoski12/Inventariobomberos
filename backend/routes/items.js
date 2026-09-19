@@ -98,6 +98,7 @@ router.get("/items", (req, res) => {
   const criticidad  = (req.query.criticidad ?? "").trim();
   const bombero_id  = req.query.bombero_id  ? Number(req.query.bombero_id)  : null;
   const ubicacion_id= req.query.ubicacion_id? Number(req.query.ubicacion_id): null;
+  const ubicacion_detalle = cleanText(req.query.ubicacion_detalle);
 
   if (estado     && !ESTADOS_ITEM.includes(estado))
     return badRequest(res, `estado inválido. Use: ${ESTADOS_ITEM.join(", ")}`);
@@ -122,6 +123,7 @@ router.get("/items", (req, res) => {
   if (criticidad)  { conditions.push("i.criticidad = ?");           params.push(criticidad); }
   if (bombero_id)  { conditions.push("i.asignado_bombero_id = ?");  params.push(bombero_id); }
   if (ubicacion_id){ conditions.push("i.ubicacion_actual_id = ?");  params.push(ubicacion_id); }
+  if (ubicacion_detalle) { conditions.push("i.ubicacion_detalle = ?"); params.push(ubicacion_detalle); }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const order = q ? "ORDER BY i.codigo" : "ORDER BY i.id DESC";
@@ -231,6 +233,7 @@ router.get("/items/exportar", (req, res) => {
         const criticidad   = (req.query.criticidad ?? "").trim();
         const bombero_id   = req.query.bombero_id  ? Number(req.query.bombero_id)  : null;
         const ubicacion_id = req.query.ubicacion_id? Number(req.query.ubicacion_id): null;
+        const ubicacion_detalle = cleanText(req.query.ubicacion_detalle);
 
         if (estado     && !ESTADOS_ITEM.includes(estado))
             return badRequest(res, `estado inválido. Use: ${ESTADOS_ITEM.join(", ")}`);
@@ -246,12 +249,13 @@ router.get("/items/exportar", (req, res) => {
         if (criticidad)  { conditions.push("i.criticidad = ?");           params.push(criticidad); }
         if (bombero_id)  { conditions.push("i.asignado_bombero_id = ?");  params.push(bombero_id); }
         if (ubicacion_id){ conditions.push("i.ubicacion_actual_id = ?");  params.push(ubicacion_id); }
+        if (ubicacion_detalle) { conditions.push("i.ubicacion_detalle = ?"); params.push(ubicacion_detalle); }
 
         const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
         const rows = db.prepare(`
             SELECT i.codigo, i.descripcion, i.categoria, i.subcategoria, i.estado, i.criticidad,
                    i.marca, i.modelo, i.serie, i.talla,
-                   b.nombre AS asignado_a, u.nombre AS ubicacion,
+                   b.nombre AS asignado_a, u.nombre AS ubicacion, i.ubicacion_detalle,
                    i.fecha_recepcion, i.fecha_vencimiento, i.fecha_fabricacion
             FROM item i
             LEFT JOIN ubicacion u ON u.id = i.ubicacion_actual_id
@@ -273,6 +277,7 @@ router.get("/items/exportar", (req, res) => {
             "Talla":              r.talla ?? "",
             "Asignado a":         r.asignado_a ?? "",
             "Ubicación":          r.ubicacion ?? "",
+            "Gaveta/Detalle":     r.ubicacion_detalle ?? "",
             "Fecha Fabricación":  r.fecha_fabricacion ?? "",
             "Fecha Recepción":    r.fecha_recepcion ?? "",
             "Fecha Vencimiento":  r.fecha_vencimiento ?? "",
@@ -296,6 +301,19 @@ router.get("/items/meta/proximo-codigo", (req, res) => {
     if (!categoria || !CATEGORIAS.includes(categoria))
         return badRequest(res, `categoria inválida. Use: ${CATEGORIAS.join(", ")}`);
     res.json({ codigo: siguienteCodigoItem(categoria) });
+});
+
+// Gavetas/compartimientos en uso dentro de un carro (u otra ubicación), para
+// el sub-filtro que aparece al buscar ítems filtrando por esa ubicación
+router.get("/items/meta/gavetas", (req, res) => {
+    const ubicacion_id = Number(req.query.ubicacion_id);
+    if (!Number.isInteger(ubicacion_id) || ubicacion_id <= 0) return badRequest(res, "ubicacion_id inválido");
+    const rows = db.prepare(`
+        SELECT DISTINCT ubicacion_detalle FROM item
+        WHERE ubicacion_actual_id = ? AND ubicacion_detalle IS NOT NULL
+        ORDER BY ubicacion_detalle
+    `).all(ubicacion_id);
+    res.json(rows.map(r => r.ubicacion_detalle));
 });
 
 // Metadatos para dropdowns creativos
