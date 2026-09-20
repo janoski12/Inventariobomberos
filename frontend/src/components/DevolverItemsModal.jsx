@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Modal from "./Modal";
+import GavetaInput from "./GavetaInput";
 import { buscarItems } from "../api/items";
 import { listarUbicaciones } from "../api/ubicaciones";
 import { solicitarActaDevolucion, abrirDocumento } from "../api/actas";
@@ -131,8 +132,12 @@ export default function DevolverItemsModal({ open, onClose, bombero, itemFijo, o
         {esCarro && (
           <label className="label">
             Gaveta / compartimiento (opcional)
-            <input className="input" value={ubicacionDetalle} onChange={(e) => setUbicacionDetalle(e.target.value)}
-              placeholder="Ej: Gaveta 3, compartimiento lateral" />
+            <GavetaInput
+              ubicacionId={ubicacionId}
+              value={ubicacionDetalle}
+              onChange={setUbicacionDetalle}
+              placeholder="Ej: Gaveta 3, compartimiento lateral"
+            />
           </label>
         )}
 
