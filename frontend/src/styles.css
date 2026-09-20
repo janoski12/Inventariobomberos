@@ -777,3 +777,14 @@ h1, h2, h3 { margin: 0; }
 }
 .revision-btn--ok.revision-btn--activo    { border-color: var(--c-operativo); color: var(--c-operativo); background: rgba(76,175,80,.12); }
 .revision-btn--falla.revision-btn--activo { border-color: var(--c-fuera-servicio); color: var(--c-fuera-servicio); background: rgba(239,83,80,.12); }
+
+.link-button {
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    color: var(--accent);
+    text-decoration: underline;
+}

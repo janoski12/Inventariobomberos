@@ -72,6 +72,10 @@ try { db.exec("ALTER TABLE acta_entrega ADD COLUMN ubicacion_destino_detalle TEX
 try { db.exec("ALTER TABLE usuario ADD COLUMN bombero_id INTEGER REFERENCES bombero(id)"); } catch {}
 try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_usuario_bombero ON usuario(bombero_id) WHERE bombero_id IS NOT NULL"); } catch {}
 
+// Migracion: revision de una sola gaveta/compartimiento del carro, en vez del
+// carro completo. NULL significa que la revision cubrio el carro completo.
+try { db.exec("ALTER TABLE revision_carro ADD COLUMN gaveta TEXT"); } catch {}
+
 // La tabla asignacion_pendiente (un item por acta) se reemplazo por acta_entrega +
 // acta_entrega_item (varios items por acta). No hubo datos reales en producción
 // bajo el modelo anterior, asi que se descarta en vez de migrarla.

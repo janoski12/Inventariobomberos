@@ -47,7 +47,7 @@ export default function Carros() {
                   <div className="card-detail">
                     {c.ultima_revision ? (
                       <>
-                        Última revisión: {c.ultima_revision.fecha} por {c.ultima_revision.realizada_por}
+                        Última revisión{c.ultima_revision.gaveta ? ` (gaveta: ${c.ultima_revision.gaveta})` : ""}: {c.ultima_revision.fecha} por {c.ultima_revision.realizada_por}
                         {c.ultima_revision.fallas > 0 && (
                           <span className="badge-warning" style={{ marginLeft: 8 }}>
                             {c.ultima_revision.fallas} observación{c.ultima_revision.fallas !== 1 ? "es" : ""}

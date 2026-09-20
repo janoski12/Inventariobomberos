@@ -802,6 +802,78 @@ describe("Módulo Carros y revisión pública", () => {
     });
 });
 
+describe("Revisión pública de una sola gaveta del carro", () => {
+    let carroId, itemAId, itemBId;
+
+    test("preparar carro con items en dos gavetas distintas", async () => {
+        const carro = await request(app).post("/api/ubicaciones").set(auth(adminToken))
+            .send({ nombre: "Carro Revisión Gaveta Test", tipo: "CARRO" });
+        carroId = carro.body.id;
+
+        const a = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ categoria: "EPP", descripcion: "Casco A", ubicacion_actual_id: carroId, ubicacion_detalle: "Gaveta A" });
+        const b = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ categoria: "EPP", descripcion: "Casco B", ubicacion_actual_id: carroId, ubicacion_detalle: "Gaveta B" });
+        itemAId = a.body.id;
+        itemBId = b.body.id;
+    });
+
+    test("revisión de una gaveta con un item de OTRA gaveta → 400", async () => {
+        const res = await request(app).post(`/api/carros-publico/${carroId}/revisiones`)
+            .send({
+                realizada_por: "Bombero X",
+                gaveta: "Gaveta A",
+                items: [{ item_id: itemBId, resultado: "OK" }],
+            });
+        assert.equal(res.status, 400);
+    });
+
+    let revisionGavetaId;
+    test("revisión válida de solo la Gaveta A queda registrada con esa etiqueta", async () => {
+        const res = await request(app).post(`/api/carros-publico/${carroId}/revisiones`)
+            .send({
+                realizada_por: "Bombero A",
+                gaveta: "Gaveta A",
+                items: [{ item_id: itemAId, resultado: "OK" }],
+            });
+        assert.equal(res.status, 201);
+        revisionGavetaId = res.body.id;
+    });
+
+    test("la ficha del carro y el listado reflejan la revisión como parcial (gaveta)", async () => {
+        const ficha = await request(app).get(`/api/carros/${carroId}`).set(auth(adminToken));
+        assert.equal(ficha.body.revisiones[0].gaveta, "Gaveta A");
+        assert.equal(ficha.body.revisiones[0].total_items, 1);
+
+        const lista = await request(app).get("/api/carros").set(auth(adminToken));
+        const carro = lista.body.find((c) => c.id === carroId);
+        assert.equal(carro.ultima_revision.gaveta, "Gaveta A");
+    });
+
+    test("GET /carros/:id/revisiones/:revisionId incluye la gaveta en el detalle", async () => {
+        const res = await request(app).get(`/api/carros/${carroId}/revisiones/${revisionGavetaId}`).set(auth(adminToken));
+        assert.equal(res.body.gaveta, "Gaveta A");
+        assert.equal(res.body.items.length, 1);
+    });
+
+    test("una revisión de todo el carro (sin gaveta) queda con gaveta null", async () => {
+        const res = await request(app).post(`/api/carros-publico/${carroId}/revisiones`)
+            .send({
+                realizada_por: "Bombero Completo",
+                items: [
+                    { item_id: itemAId, resultado: "OK" },
+                    { item_id: itemBId, resultado: "OK" },
+                ],
+            });
+        assert.equal(res.status, 201);
+
+        const lista = await request(app).get("/api/carros").set(auth(adminToken));
+        const carro = lista.body.find((c) => c.id === carroId);
+        assert.equal(carro.ultima_revision.gaveta, null);
+        assert.equal(carro.ultima_revision.realizada_por, "Bombero Completo");
+    });
+});
+
 describe("Sub-filtro de gaveta al buscar dentro de un carro", () => {
     let carroId, itemGaveta1Id, itemGaveta2Id, itemSinGavetaId;
 
