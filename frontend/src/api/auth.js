@@ -23,6 +23,12 @@ export const obtenerPerfil = () =>
 export const cambiarPassword = (actual, nueva) =>
   request(`${API_URL}/auth/password`, { method: "PUT", ...json({ actual, nueva }) });
 
+export const recuperacionDisponible = () =>
+  request(`${API_URL}/auth/recuperacion`);
+
+export const solicitarRecuperacion = (correo) =>
+  request(`${API_URL}/auth/recuperar`, { method: "POST", ...json({ correo }) });
+
 export const listarUsuarios = () =>
   request(`${API_URL}/usuarios`);
 

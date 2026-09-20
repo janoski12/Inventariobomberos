@@ -16,6 +16,8 @@ const app = require("../server");
 const db = require("../db");
 const { fechaLocalISO: fechaISO } = require("../lib/helpers");
 const limiteLogin = require("../lib/limitarLogin");
+const servicioCorreo = require("../lib/correo");
+const recuperacion = require("../lib/recuperacion");
 
 let adminToken;
 let operadorToken;
@@ -544,6 +546,224 @@ describe("Cambio de contraseña propio", () => {
         assert.equal(reloginViejo.status, 401);
         const reloginNuevo = await request(app).post("/api/auth/login").send({ username: "cambia_clave", password: "clave2nueva" });
         assert.equal(reloginNuevo.status, 200);
+    });
+});
+
+describe("Recuperación de contraseña por correo", () => {
+    const enviados = [];
+    const transporteFalso = { sendMail: async (mensaje) => { enviados.push(mensaje); return { messageId: "prueba" }; } };
+
+    const pedir = (correo) => request(app).post("/api/auth/recuperar").send({ correo });
+    const entrar = (username, password) => request(app).post("/api/auth/login").send({ username, password });
+    const temporalDe = (mensaje) => mensaje.text.match(/Contraseña temporal: (\S+)/)[1];
+    // El envío ocurre en segundo plano: se espera a que termine antes de mirar lo enviado
+    const pedirYEsperar = async (correo) => {
+        const res = await pedir(correo);
+        await recuperacion.esperarPendientes();
+        return res;
+    };
+
+    // Cuenta lista para usar: ya cambió su clave temporal, así que su contraseña "actual" es conocida
+    async function crearCuenta(username, correo, extra = {}) {
+        const creada = await request(app).post("/api/usuarios").set(auth(adminToken))
+            .send({ username, nombre: `Nombre ${username}`, correo, ...extra });
+        const login = await entrar(username, creada.body.password_temporal);
+        await request(app).put("/api/auth/password").set(auth(login.body.token))
+            .send({ actual: creada.body.password_temporal, nueva: "clave-original-1" });
+        return { id: creada.body.id, username, correo, password: "clave-original-1" };
+    }
+
+    before(() => servicioCorreo.usarTransporteDePrueba(transporteFalso));
+    after(() => servicioCorreo.usarTransporteDePrueba(null));
+    beforeEach(() => {
+        enviados.length = 0;
+        recuperacion.reiniciarLimites();
+        limiteLogin.reiniciar();
+    });
+
+    test("GET /auth/recuperacion informa si el envío de correo está configurado", async () => {
+        assert.equal((await request(app).get("/api/auth/recuperacion")).body.disponible, true);
+
+        servicioCorreo.usarTransporteDePrueba(null);
+        try {
+            const sinConfigurar = await request(app).get("/api/auth/recuperacion");
+            assert.equal(sinConfigurar.status, 200);
+            assert.equal(sinConfigurar.body.disponible, false);
+            assert.equal((await pedir("alguien@bomberos.cl")).status, 503, "sin envío configurado no se puede recuperar");
+        } finally {
+            servicioCorreo.usarTransporteDePrueba(transporteFalso);
+        }
+    });
+
+    test("un correo vacío o con formato inválido → 400 y no envía nada", async () => {
+        for (const malo of ["", "   ", "sin-arroba", "a@b", "con espacio@dominio.cl"]) {
+            assert.equal((await pedirYEsperar(malo)).status, 400, `debió rechazar "${malo}"`);
+        }
+        assert.equal(enviados.length, 0);
+    });
+
+    test("un correo registrado recibe el usuario y una contraseña temporal", async () => {
+        const c = await crearCuenta("rec_ok", "rec_ok@bomberos.cl");
+        const res = await pedirYEsperar(c.correo);
+        assert.equal(res.status, 200);
+
+        assert.equal(enviados.length, 1);
+        assert.equal(enviados[0].to, "rec_ok@bomberos.cl");
+        assert.match(enviados[0].subject, /contraseña/i);
+        assert.match(enviados[0].text, /Usuario: rec_ok/);
+        assert.match(temporalDe(enviados[0]), /^[A-Za-z2-9]{10}$/);
+        assert.doesNotMatch(enviados[0].text, /clave-original-1/, "el correo no debe mencionar la contraseña actual");
+    });
+
+    test("la respuesta es idéntica si el correo NO está registrado (no revela qué correos existen)", async () => {
+        await crearCuenta("rec_igual", "rec_igual@bomberos.cl");
+        const existente = await pedirYEsperar("rec_igual@bomberos.cl");
+        const inexistente = await pedirYEsperar("nadie@bomberos.cl");
+
+        assert.equal(inexistente.status, existente.status);
+        assert.deepEqual(inexistente.body, existente.body);
+        assert.equal(enviados.length, 1, "solo el correo registrado recibe algo");
+    });
+
+    test("el correo se busca sin distinguir mayúsculas ni espacios", async () => {
+        await crearCuenta("rec_mayus", "rec_mayus@bomberos.cl");
+        await pedirYEsperar("  REC_Mayus@Bomberos.CL ");
+        assert.equal(enviados.length, 1);
+        assert.equal(enviados[0].to, "rec_mayus@bomberos.cl");
+    });
+
+    test("una cuenta inactiva no recibe correo (con la misma respuesta)", async () => {
+        const c = await crearCuenta("rec_inactiva", "rec_inactiva@bomberos.cl");
+        await request(app).put(`/api/usuarios/${c.id}`).set(auth(adminToken)).send({ activo: false });
+
+        const res = await pedirYEsperar(c.correo);
+        assert.equal(res.status, 200);
+        assert.equal(enviados.length, 0);
+    });
+
+    test("con la temporal se ingresa, se obliga a cambiarla, y la clave anterior deja de servir", async () => {
+        const c = await crearCuenta("rec_flujo", "rec_flujo@bomberos.cl");
+        await pedirYEsperar(c.correo);
+        const temporal = temporalDe(enviados[0]);
+
+        const login = await entrar(c.username, temporal);
+        assert.equal(login.status, 200);
+        assert.equal(login.body.usuario.debe_cambiar_password, true);
+        assert.equal((await request(app).get("/api/items").set(auth(login.body.token))).status, 403, "bloqueado hasta cambiarla");
+
+        const cambio = await request(app).put("/api/auth/password").set(auth(login.body.token))
+            .send({ actual: temporal, nueva: "clave-nueva-2" });
+        assert.equal(cambio.status, 200);
+        assert.equal((await request(app).get("/api/items").set(auth(login.body.token))).status, 200);
+
+        assert.equal((await entrar(c.username, c.password)).status, 401, "la clave original fue reemplazada");
+        assert.equal((await entrar(c.username, temporal)).status, 401, "la temporal ya no existe");
+        assert.equal((await entrar(c.username, "clave-nueva-2")).status, 200);
+    });
+
+    test("pedir la recuperación NO le quita el acceso a su dueño con la clave actual", async () => {
+        const c = await crearCuenta("rec_victima", "rec_victima@bomberos.cl");
+        for (let i = 0; i < 3; i++) await pedirYEsperar(c.correo);
+
+        const login = await entrar(c.username, c.password);
+        assert.equal(login.status, 200);
+        assert.equal(login.body.usuario.debe_cambiar_password, false);
+    });
+
+    test("si la persona entra con su clave actual, la temporal pendiente se descarta", async () => {
+        const c = await crearCuenta("rec_descarta", "rec_descarta@bomberos.cl");
+        await pedirYEsperar(c.correo);
+        const temporal = temporalDe(enviados[0]);
+
+        assert.equal((await entrar(c.username, c.password)).status, 200);
+        assert.equal((await entrar(c.username, temporal)).status, 401);
+    });
+
+    test("la temporal vence (y la clave actual sigue funcionando)", async () => {
+        const c = await crearCuenta("rec_vence", "rec_vence@bomberos.cl");
+        await pedirYEsperar(c.correo);
+        const temporal = temporalDe(enviados[0]);
+
+        db.prepare("UPDATE usuario SET recuperacion_expira = ? WHERE id = ?").run(Date.now() - 1000, c.id);
+
+        assert.equal((await entrar(c.username, temporal)).status, 401);
+        assert.equal((await entrar(c.username, c.password)).status, 200);
+    });
+
+    test("la temporal de una cuenta no sirve en otra", async () => {
+        const a = await crearCuenta("rec_cuenta_a", "rec_cuenta_a@bomberos.cl");
+        const b = await crearCuenta("rec_cuenta_b", "rec_cuenta_b@bomberos.cl");
+        await pedirYEsperar(a.correo);
+
+        assert.equal((await entrar(b.username, temporalDe(enviados[0]))).status, 401);
+    });
+
+    test("una segunda solicitud invalida la temporal anterior", async () => {
+        const c = await crearCuenta("rec_dos", "rec_dos@bomberos.cl");
+        await pedirYEsperar(c.correo);
+        await pedirYEsperar(c.correo);
+        assert.equal(enviados.length, 2);
+
+        assert.equal((await entrar(c.username, temporalDe(enviados[0]))).status, 401);
+        assert.equal((await entrar(c.username, temporalDe(enviados[1]))).status, 200);
+    });
+
+    test("límite por correo: la cuarta solicitud en una hora → 429 y no envía", async () => {
+        await crearCuenta("rec_limite", "rec_limite@bomberos.cl");
+        for (let i = 0; i < 3; i++) assert.equal((await pedirYEsperar("rec_limite@bomberos.cl")).status, 200);
+        assert.equal((await pedirYEsperar("rec_limite@bomberos.cl")).status, 429);
+        assert.equal(enviados.length, 3);
+    });
+
+    test("el límite por correo se aplica igual a correos que no existen (no delata cuáles están registrados)", async () => {
+        for (let i = 0; i < 3; i++) assert.equal((await pedirYEsperar("fantasma@bomberos.cl")).status, 200);
+        assert.equal((await pedirYEsperar("fantasma@bomberos.cl")).status, 429);
+    });
+
+    test("límite global: tras 30 solicitudes en una hora, cualquier correo → 429", async () => {
+        for (let i = 0; i < 30; i++) assert.equal((await pedir(`masivo_${i}@bomberos.cl`)).status, 200);
+        assert.equal((await pedir("otro@bomberos.cl")).status, 429);
+    });
+
+    test("si el envío falla, la temporal se retira y el servidor sigue respondiendo", async () => {
+        const c = await crearCuenta("rec_falla", "rec_falla@bomberos.cl");
+        servicioCorreo.usarTransporteDePrueba({ sendMail: async () => { throw new Error("SMTP caído"); } });
+        try {
+            const res = await pedirYEsperar(c.correo);
+            assert.equal(res.status, 200, "la persona no debe enterarse del fallo interno");
+            assert.equal(db.prepare("SELECT recuperacion_hash FROM usuario WHERE id=?").get(c.id).recuperacion_hash, null);
+        } finally {
+            servicioCorreo.usarTransporteDePrueba(transporteFalso);
+        }
+        assert.equal((await entrar(c.username, c.password)).status, 200);
+    });
+
+    test("cambiar la clave propia, o que un admin la restablezca, descarta la temporal pendiente", async () => {
+        const c1 = await crearCuenta("rec_cambia", "rec_cambia@bomberos.cl");
+        const sesion = await entrar(c1.username, c1.password);
+        await pedirYEsperar(c1.correo);
+        const temporal1 = temporalDe(enviados[0]);
+        await request(app).put("/api/auth/password").set(auth(sesion.body.token))
+            .send({ actual: c1.password, nueva: "clave-cambiada-3" });
+        assert.equal((await entrar(c1.username, temporal1)).status, 401);
+
+        const c2 = await crearCuenta("rec_admin_reset", "rec_admin_reset@bomberos.cl");
+        await pedirYEsperar(c2.correo);
+        const temporal2 = temporalDe(enviados[1]);
+        await request(app).put(`/api/usuarios/${c2.id}`).set(auth(adminToken)).send({ password: "clave-del-admin-4" });
+        assert.equal((await entrar(c2.username, temporal2)).status, 401);
+    });
+
+    test("el listado de usuarios no expone datos de recuperación ni hashes", async () => {
+        const c = await crearCuenta("rec_fuga", "rec_fuga@bomberos.cl");
+        await pedirYEsperar(c.correo);
+
+        const lista = await request(app).get("/api/usuarios").set(auth(adminToken));
+        const fila = lista.body.find((u) => u.id === c.id);
+        for (const campo of ["recuperacion_hash", "recuperacion_expira", "password_hash"]) {
+            assert.equal(campo in fila, false, `no debe exponer ${campo}`);
+        }
+        assert.doesNotMatch(JSON.stringify(lista.body), /\$2[aby]\$/, "no debe aparecer ningún hash bcrypt");
     });
 });
 

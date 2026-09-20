@@ -9,6 +9,13 @@ services:
       PORT: 3001
       JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en .env (ver .env.example)}
       FRONTEND_URL: ${FRONTEND_URL:-}
+      # Recuperacion de contraseña por correo (opcional; ver .env.example)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     volumes:
       - inventario_data:/app/backend/data
     healthcheck:

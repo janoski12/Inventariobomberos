@@ -63,6 +63,7 @@ npm install
 | `PORT`         | Puerto del servidor (por defecto `3001`). Sirve la app y la API en el mismo puerto.  |
 | `JWT_SECRET`   | Clave para firmar los tokens de sesión. **Obligatoria**: el servidor no arranca sin ella. |
 | `FRONTEND_URL` | *(Opcional)* Fuerza el origen de los QR de ubicaciones. Normalmente no hace falta: se usa la URL con la que se accede al sistema. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` (y `SMTP_SECURE`, `SMTP_FROM`) | *(Opcionales)* Envío de correo para [recuperar contraseñas](#recuperación-de-contraseña-por-correo). Sin ellas la recuperación no se ofrece. |
 
 > Con Docker estas mismas variables van en el `.env` de la **raíz** del
 > proyecto (junto a `docker-compose.yml`), no en `backend/.env` — ver
@@ -156,6 +157,38 @@ clave:    admin123
 
 Los cambios sobre una cuenta (desactivarla, eliminarla, cambiarle el rol) se aplican
 de inmediato, aunque la persona tenga la sesión abierta.
+
+### Recuperación de contraseña por correo
+
+Desde la pantalla de ingreso, **¿Olvidaste tu contraseña?** pide el correo registrado en
+la cuenta y le envía una contraseña temporal, que se debe cambiar al ingresar. El correo
+de cada cuenta lo cargan los administradores en **Usuarios**.
+
+Para activarla hay que configurar el envío de correo con estas variables (en el `.env` de
+la raíz si usas Docker, o en `backend/.env`; ver `.env.example`). Sin ellas el sistema
+funciona igual, pero el enlace no aparece:
+
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USER=correo-del-sistema@gmail.com
+SMTP_PASS=contraseña-de-aplicacion
+```
+
+Con Gmail hace falta activar la verificación en 2 pasos y crear una **contraseña de
+aplicación** (cuenta de Google → Seguridad → Contraseñas de aplicaciones); no sirve la
+contraseña normal de la cuenta. En Docker, después de editar el `.env`: `docker compose up -d`.
+
+Cómo funciona, y por qué:
+
+- La temporal es una **segunda** contraseña válida por 60 minutos: no reemplaza a la de
+  siempre hasta que se usa. Así, pedir la recuperación de la cuenta de otra persona no la
+  deja fuera, y si la persona recuerda su clave y entra normalmente, la temporal se descarta.
+- La respuesta es la misma exista o no el correo, para no revelar qué correos están registrados.
+- Máximo 3 solicitudes por correo y 30 en total por hora, para evitar llenar un buzón ajeno
+  o agotar la cuota del servicio de correo.
+- Si el correo no llega (o la cuenta no tiene correo), un administrador puede restablecer la
+  contraseña desde **Usuarios**, como siempre.
 
 ### Intentos fallidos de login
 

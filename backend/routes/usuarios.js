@@ -126,7 +126,9 @@ router.put("/usuarios/:id", (req, res) => {
         if (password !== undefined && password !== null && password !== "") {
             if (String(password).length < 6) return badRequest(res, "La contraseña debe tener al menos 6 caracteres");
             // Una clave puesta por un admin tambien es "temporal": se exige cambiarla en el proximo ingreso
-            db.prepare("UPDATE usuario SET password_hash = ?, debe_cambiar_password = 1 WHERE id = ?").run(bcrypt.hashSync(password, 10), id);
+            // (y descarta una temporal de recuperación por correo que hubiera quedado pendiente)
+            db.prepare("UPDATE usuario SET password_hash = ?, debe_cambiar_password = 1, recuperacion_hash = NULL, recuperacion_expira = NULL WHERE id = ?")
+                .run(bcrypt.hashSync(password, 10), id);
         }
 
         db.prepare("UPDATE usuario SET nombre = ?, rol = ?, activo = ?, bombero_id = ?, correo = ? WHERE id = ?")

@@ -78,6 +78,13 @@ try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_usuario_bombero ON usuario(
 try { db.exec("ALTER TABLE usuario ADD COLUMN correo TEXT"); } catch {}
 try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_usuario_correo ON usuario(correo) WHERE correo IS NOT NULL"); } catch {}
 
+// Migracion: contraseña temporal enviada por correo al recuperar la clave. Es una
+// SEGUNDA credencial, con vencimiento (ms desde epoch), que no reemplaza a la
+// contraseña actual hasta que se usa: asi, pedir la recuperacion de la cuenta de
+// otro no le quita el acceso a su dueño.
+try { db.exec("ALTER TABLE usuario ADD COLUMN recuperacion_hash TEXT"); } catch {}
+try { db.exec("ALTER TABLE usuario ADD COLUMN recuperacion_expira INTEGER"); } catch {}
+
 // Migracion: revision de una sola gaveta/compartimiento del carro, en vez del
 // carro completo. NULL significa que la revision cubrio el carro completo.
 try { db.exec("ALTER TABLE revision_carro ADD COLUMN gaveta TEXT"); } catch {}
