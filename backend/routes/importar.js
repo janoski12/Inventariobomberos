@@ -63,6 +63,11 @@ router.post("/importar", requireAdmin, upload.single("archivo"), async (req, res
         const insMov       = db.prepare(`INSERT INTO movimiento (item_id, tipo, desde, hacia, responsable, observacion, fecha) VALUES (?, ?, ?, ?, ?, ?, datetime('now','localtime'))`);
 
         db.transaction(() => {
+            // Las cuentas de usuario no se borran, pero su bombero sí se recrea (con otro id):
+            // se anota a quién estaba vinculada cada una para re-vincularla por nombre al final
+            const vinculos = db.prepare("SELECT u.id, b.nombre FROM usuario u JOIN bombero b ON b.id = u.bombero_id").all();
+            db.prepare("UPDATE usuario SET bombero_id = NULL").run();
+
             db.prepare("DELETE FROM uso_trauma").run();
             db.prepare("DELETE FROM acta_entrega_item").run();
             db.prepare("DELETE FROM acta_entrega").run();
@@ -93,6 +98,10 @@ router.post("/importar", requireAdmin, upload.single("archivo"), async (req, res
 
             const bomMap = new Map();
             for (const r of db.prepare("SELECT id, nombre FROM bombero").all()) bomMap.set(r.nombre, r.id);
+
+            // Quien ya no figura en el Excel queda sin vínculo (la cuenta se conserva)
+            const revincular = db.prepare("UPDATE usuario SET bombero_id = ? WHERE id = ?");
+            for (const v of vinculos) revincular.run(bomMap.get(v.nombre) ?? null, v.id);
 
             for (const it of items) {
                 const codigo = normXlsx(it.codigo); if (!codigo) continue;

@@ -1,11 +1,13 @@
-const { test, before, after, describe } = require("node:test");
+const { test, before, after, beforeEach, afterEach, describe } = require("node:test");
 const assert = require("node:assert");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
-// BD temporal aislada: debe definirse ANTES de importar la app (que carga db.js)
-const TMP_DB = path.join(os.tmpdir(), `cbt10_test_${Date.now()}.db`);
+// BD temporal aislada: debe definirse ANTES de importar la app (que carga db.js).
+// Va en una carpeta propia porque respaldos/ y documentos/ se crean junto a la BD.
+const TMP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "cbt10_test_"));
+const TMP_DB = path.join(TMP_DIR, "test.db");
 process.env.DB_PATH = TMP_DB;
 process.env.JWT_SECRET = "test-secret";
 
@@ -13,6 +15,7 @@ const request = require("supertest");
 const app = require("../server");
 const db = require("../db");
 const { fechaLocalISO: fechaISO } = require("../lib/helpers");
+const limiteLogin = require("../lib/limitarLogin");
 
 let adminToken;
 let operadorToken;
@@ -25,7 +28,7 @@ before(async () => {
 
 after(() => {
     try { db.close(); } catch { /* noop */ }
-    try { fs.unlinkSync(TMP_DB); } catch { /* noop */ }
+    try { fs.rmSync(TMP_DIR, { recursive: true, force: true }); } catch { /* noop */ }
 });
 
 const auth = (token) => ({ Authorization: `Bearer ${token}` });
@@ -70,6 +73,79 @@ describe("Autenticación", () => {
         const res = await request(app).get("/api/no-existe").set(auth(adminToken));
         assert.equal(res.status, 404);
         assert.ok(res.body.error);
+    });
+});
+
+describe("Límite de intentos fallidos de login (por cuenta)", () => {
+    const { MAX_FALLOS, VENTANA_MS } = limiteLogin;
+    const login = (username, password) => request(app).post("/api/auth/login").send({ username, password });
+
+    // El contador es global al proceso: cada prueba parte de cero y no contamina a las demás
+    beforeEach(() => limiteLogin.reiniciar());
+    afterEach(() => limiteLogin.reiniciar());
+
+    test("al llegar al máximo de intentos fallidos la cuenta responde 429 con Retry-After, incluso con la clave correcta", async () => {
+        for (let i = 0; i < MAX_FALLOS; i++) assert.equal((await login("admin", "clave-mala")).status, 401);
+
+        const bloqueado = await login("admin", "admin123");
+        assert.equal(bloqueado.status, 429);
+        assert.ok(Number(bloqueado.headers["retry-after"]) > 0, "debe indicar cuánto esperar");
+        assert.match(bloqueado.body.error, /intentos/i);
+    });
+
+    test("un login correcto borra el contador de intentos fallidos", async () => {
+        for (let i = 0; i < MAX_FALLOS - 1; i++) assert.equal((await login("admin", "clave-mala")).status, 401);
+        assert.equal((await login("admin", "admin123")).status, 200);
+
+        // de no haberse borrado, estos intentos cruzarían el máximo y darían 429
+        for (let i = 0; i < MAX_FALLOS - 1; i++) assert.equal((await login("admin", "clave-mala")).status, 401);
+    });
+
+    test("los intentos incompletos (sin usuario o sin clave) no cuentan como fallidos", async () => {
+        for (let i = 0; i < MAX_FALLOS + 5; i++) assert.equal((await login("admin", "")).status, 400);
+        assert.equal((await login("admin", "admin123")).status, 200);
+    });
+
+    test("el bloqueo es por cuenta: bloquear una no afecta a las demás", async () => {
+        const otra = await request(app).post("/api/usuarios").set(auth(adminToken)).send({ username: "cuenta_no_bloqueada" });
+        for (let i = 0; i < MAX_FALLOS; i++) await login("admin", "clave-mala");
+        assert.equal((await login("admin", "admin123")).status, 429);
+
+        assert.equal((await login("cuenta_no_bloqueada", otra.body.password_temporal)).status, 200);
+    });
+
+    test("probar nombres de usuario inexistentes comparte un solo cupo y no afecta a cuentas reales", async () => {
+        for (let i = 0; i < MAX_FALLOS; i++) assert.equal((await login(`no_existe_${i}`, "x")).status, 401);
+        assert.equal((await login("otro_nombre_inexistente", "x")).status, 429);
+
+        assert.equal((await login("admin", "admin123")).status, 200);
+    });
+
+    test("una cuenta desactivada también cuenta sus intentos fallidos", async () => {
+        const c = await request(app).post("/api/usuarios").set(auth(adminToken)).send({ username: "cuenta_desactivada_login" });
+        await request(app).put(`/api/usuarios/${c.body.id}`).set(auth(adminToken)).send({ activo: false });
+        for (let i = 0; i < MAX_FALLOS; i++) assert.equal((await login("cuenta_desactivada_login", c.body.password_temporal)).status, 401);
+        assert.equal((await login("cuenta_desactivada_login", c.body.password_temporal)).status, 429);
+    });
+
+    test("el bloqueo vence con el tiempo y el conteo vuelve a empezar", () => {
+        const t = 1_000_000;
+        for (let i = 0; i < MAX_FALLOS - 1; i++) assert.equal(limiteLogin.registrarFallo("cuenta-a", t), false);
+        assert.equal(limiteLogin.registrarFallo("cuenta-a", t), true, "el último intento bloquea");
+
+        assert.equal(limiteLogin.msBloqueado("cuenta-a", t + VENTANA_MS - 1), 1);
+        assert.equal(limiteLogin.msBloqueado("cuenta-a", t + VENTANA_MS), 0);
+
+        // tras vencer, hacen falta otros MAX_FALLOS intentos para volver a bloquear
+        for (let i = 0; i < MAX_FALLOS - 1; i++) assert.equal(limiteLogin.registrarFallo("cuenta-a", t + VENTANA_MS), false);
+        assert.equal(limiteLogin.msBloqueado("cuenta-a", t + VENTANA_MS), 0);
+    });
+
+    test("los fallos espaciados más que la ventana no se acumulan", () => {
+        const t = 1_000_000;
+        for (let i = 0; i < MAX_FALLOS * 3; i++) {
+            assert.equal(limiteLogin.registrarFallo("cuenta-a", t + i * VENTANA_MS), false);
+        }
     });
 });
 
@@ -313,6 +389,25 @@ describe("Vínculo entre usuario y bombero", () => {
         assert.equal(me.body.bombero_id, bomberoLogin.body.id);
         assert.equal(me.body.bombero_nombre, "Bombero Vinculo Login");
     });
+
+    test("no se puede eliminar un bombero vinculado a una cuenta → 409 que nombra la cuenta", async () => {
+        const bom = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero Vinculado A Borrar" });
+        const cuenta = await request(app).post("/api/usuarios").set(auth(adminToken))
+            .send({ username: "vinc_borrar", bombero_id: bom.body.id });
+        assert.equal(cuenta.status, 201);
+
+        const del = await request(app).delete(`/api/bomberos/${bom.body.id}`).set(auth(adminToken));
+        assert.equal(del.status, 409);
+        assert.match(del.body.error, /vinc_borrar/);
+
+        const sigue = await request(app).get(`/api/bomberos/${bom.body.id}`).set(auth(adminToken));
+        assert.equal(sigue.status, 200, "el bombero debe seguir existiendo");
+
+        // una vez desvinculado, sí se puede eliminar
+        await request(app).put(`/api/usuarios/${cuenta.body.id}`).set(auth(adminToken)).send({ bombero_id: null });
+        const delOk = await request(app).delete(`/api/bomberos/${bom.body.id}`).set(auth(adminToken));
+        assert.equal(delOk.status, 200);
+    });
 });
 
 describe("Trazabilidad atribuida al usuario logueado", () => {
@@ -384,6 +479,71 @@ describe("Cambio de contraseña propio", () => {
         assert.equal(reloginViejo.status, 401);
         const reloginNuevo = await request(app).post("/api/auth/login").send({ username: "cambia_clave", password: "clave2nueva" });
         assert.equal(reloginNuevo.status, 200);
+    });
+});
+
+describe("Sesiones: desactivar, eliminar o degradar una cuenta surte efecto de inmediato", () => {
+    // Crea una cuenta lista para usar (ya cambió su clave temporal) y devuelve su token
+    async function crearCuentaConSesion(username, rol) {
+        const creado = await request(app).post("/api/usuarios").set(auth(adminToken)).send({ username, rol });
+        const login = await request(app).post("/api/auth/login")
+            .send({ username, password: creado.body.password_temporal });
+        const cambio = await request(app).put("/api/auth/password").set(auth(login.body.token))
+            .send({ actual: creado.body.password_temporal, nueva: "clave-de-prueba-1" });
+        assert.equal(cambio.status, 200);
+        return { id: creado.body.id, token: login.body.token };
+    }
+
+    test("una cuenta desactivada pierde el acceso aunque su token no haya vencido", async () => {
+        const cuenta = await crearCuentaConSesion("sesion_desactivada", "OPERADOR");
+        assert.equal((await request(app).get("/api/items").set(auth(cuenta.token))).status, 200);
+
+        await request(app).put(`/api/usuarios/${cuenta.id}`).set(auth(adminToken)).send({ activo: false });
+
+        assert.equal((await request(app).get("/api/items").set(auth(cuenta.token))).status, 401);
+        assert.equal((await request(app).get("/api/auth/me").set(auth(cuenta.token))).status, 401);
+    });
+
+    test("reactivar la cuenta le devuelve el acceso (el estado se lee de la BD, no del token)", async () => {
+        const cuenta = await crearCuentaConSesion("sesion_reactivada", "OPERADOR");
+        await request(app).put(`/api/usuarios/${cuenta.id}`).set(auth(adminToken)).send({ activo: false });
+        assert.equal((await request(app).get("/api/items").set(auth(cuenta.token))).status, 401);
+
+        await request(app).put(`/api/usuarios/${cuenta.id}`).set(auth(adminToken)).send({ activo: true });
+        assert.equal((await request(app).get("/api/items").set(auth(cuenta.token))).status, 200);
+    });
+
+    test("una cuenta eliminada pierde el acceso aunque su token no haya vencido", async () => {
+        const cuenta = await crearCuentaConSesion("sesion_eliminada", "OPERADOR");
+        assert.equal((await request(app).get("/api/items").set(auth(cuenta.token))).status, 200);
+
+        const del = await request(app).delete(`/api/usuarios/${cuenta.id}`).set(auth(adminToken));
+        assert.equal(del.status, 200);
+
+        assert.equal((await request(app).get("/api/items").set(auth(cuenta.token))).status, 401);
+    });
+
+    test("un admin degradado a operador pierde los permisos de admin de inmediato", async () => {
+        const cuenta = await crearCuentaConSesion("sesion_degradada", "ADMIN");
+        // DELETE y /usuarios exigen ADMIN: con un id inexistente, 404 significa que pasó el control de rol
+        assert.equal((await request(app).delete("/api/items/999999").set(auth(cuenta.token))).status, 404);
+        assert.equal((await request(app).get("/api/usuarios").set(auth(cuenta.token))).status, 200);
+
+        await request(app).put(`/api/usuarios/${cuenta.id}`).set(auth(adminToken)).send({ rol: "OPERADOR" });
+
+        assert.equal((await request(app).delete("/api/items/999999").set(auth(cuenta.token))).status, 403);
+        assert.equal((await request(app).get("/api/usuarios").set(auth(cuenta.token))).status, 403);
+        // sigue pudiendo operar con normalidad
+        assert.equal((await request(app).get("/api/items").set(auth(cuenta.token))).status, 200);
+    });
+
+    test("un operador ascendido a admin gana los permisos de inmediato", async () => {
+        const cuenta = await crearCuentaConSesion("sesion_ascendida", "OPERADOR");
+        assert.equal((await request(app).get("/api/usuarios").set(auth(cuenta.token))).status, 403);
+
+        await request(app).put(`/api/usuarios/${cuenta.id}`).set(auth(adminToken)).send({ rol: "ADMIN" });
+
+        assert.equal((await request(app).get("/api/usuarios").set(auth(cuenta.token))).status, 200);
     });
 });
 
@@ -1189,5 +1349,47 @@ describe("Contraseña temporal obligatoria en el primer login", () => {
 
         const bloqueadoDeNuevo = await request(app).get("/api/items").set(auth(login2.body.token));
         assert.equal(bloqueadoDeNuevo.status, 403);
+    });
+});
+
+// Debe ir al final del archivo: la carga completa reemplaza TODOS los datos de la BD
+describe("Carga completa desde Excel con cuentas vinculadas a bomberos", () => {
+    test("conserva el vínculo por nombre y deja sin vínculo a quien ya no está en el Excel", async () => {
+        const xlsx = require("xlsx");
+
+        const permanece = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero Permanece" });
+        const seVa = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero Se Va" });
+        const cuentaPermanece = await request(app).post("/api/usuarios").set(auth(adminToken))
+            .send({ username: "carga_permanece", bombero_id: permanece.body.id });
+        const cuentaSeVa = await request(app).post("/api/usuarios").set(auth(adminToken))
+            .send({ username: "carga_se_va", bombero_id: seVa.body.id });
+        assert.equal(cuentaPermanece.status, 201);
+        assert.equal(cuentaSeVa.status, 201);
+
+        const bomberoFila = (nombre) => ({ nombre, cargo: "Voluntario", estado: "ACTIVO", observaciones: "", rut: "", numero_registro: "" });
+        const wb = xlsx.utils.book_new();
+        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet([bomberoFila("Bombero Permanece"), bomberoFila("Bombero Nuevo")]), "Bomberos");
+        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet([{ nombre: "Bodega Carga", tipo: "BODEGA", responsable: "", activo: 1 }]), "Ubicaciones");
+        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet([{
+            codigo: "EPP-9001", categoria: "EPP", subcategoria: "", descripcion: "Casco de la carga", marca: "", modelo: "",
+            serie: "", talla: "", estado: "OPERATIVO", criticidad: "MEDIA", ubicacion_nombre: "Bodega Carga",
+            ubicacion_detalle: "", bombero_nombre: "", fecha_fabricacion: "", fecha_recepcion: "", fecha_vencimiento: "",
+        }]), "Items");
+        xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet([["codigo_item", "tipo", "fecha_objetivo"]]), "Controles");
+        const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+
+        const imp = await request(app).post("/api/importar").set(auth(adminToken)).attach("archivo", buf, "carga.xlsx");
+        assert.equal(imp.status, 200, JSON.stringify(imp.body));
+
+        const bomberos = await request(app).get("/api/bomberos").set(auth(adminToken));
+        const nuevoId = bomberos.body.find((b) => b.nombre === "Bombero Permanece").id;
+
+        const cuentas = await request(app).get("/api/usuarios").set(auth(adminToken));
+        const c1 = cuentas.body.find((u) => u.username === "carga_permanece");
+        const c2 = cuentas.body.find((u) => u.username === "carga_se_va");
+        assert.ok(c1 && c2, "las cuentas de usuario no se borran con la carga completa");
+        assert.equal(c1.bombero_id, nuevoId, "se re-vincula por nombre al bombero recreado");
+        assert.equal(c1.bombero_nombre, "Bombero Permanece");
+        assert.equal(c2.bombero_id, null, "quien ya no está en el Excel queda sin vínculo");
     });
 });
