@@ -154,6 +154,17 @@ clave:    admin123
 - **Operador** — ver y editar el inventario (no elimina, no gestiona usuarios y no
   accede a la carga completa ni al respaldo).
 
+Los cambios sobre una cuenta (desactivarla, eliminarla, cambiarle el rol) se aplican
+de inmediato, aunque la persona tenga la sesión abierta.
+
+### Intentos fallidos de login
+
+Tras 10 intentos fallidos seguidos con una misma cuenta, esa cuenta queda bloqueada
+15 minutos (incluso con la clave correcta); un login correcto reinicia la cuenta.
+El límite es por cuenta y no por IP porque, detrás de Docker, todos los clientes
+llegan con la misma IP interna. Si alguien queda bloqueado, basta esperar; el
+contador está en memoria, así que reiniciar el servidor también lo libera.
+
 ## Tests
 
 La suite cubre la API del backend (autenticación, permisos por rol, validaciones,

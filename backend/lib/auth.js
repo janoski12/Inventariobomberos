@@ -16,17 +16,29 @@ function firmarToken(usuario) {
     );
 }
 
-// Verifica el Bearer token y deja el usuario en req.usuario
+// Verifica el Bearer token y deja el usuario en req.usuario. El token solo
+// prueba quién es: nombre, rol y estado se leen de la BD en cada petición, para
+// que desactivar, eliminar o cambiar de rol una cuenta valga de inmediato y no
+// recién cuando venza el token.
 function requireAuth(req, res, next) {
     const header = req.headers.authorization || "";
     const token = header.startsWith("Bearer ") ? header.slice(7) : null;
     if (!token) return res.status(401).json({ error: "No autenticado" });
+
+    let payload;
     try {
-        req.usuario = jwt.verify(token, JWT_SECRET);
-        next();
+        payload = jwt.verify(token, JWT_SECRET);
     } catch {
         return res.status(401).json({ error: "Sesión inválida o expirada" });
     }
+
+    const usuario = db.prepare(
+        "SELECT id, username, nombre, rol, debe_cambiar_password FROM usuario WHERE id = ? AND activo = 1"
+    ).get(payload.id);
+    if (!usuario) return res.status(401).json({ error: "Sesión inválida o expirada" });
+
+    req.usuario = usuario;
+    next();
 }
 
 // Requiere rol ADMIN (debe ir despues de requireAuth)
@@ -42,8 +54,7 @@ function requireAdmin(req, res, next) {
 // llegar aca (routes/auth.js se monta antes que este gate en server.js), asi
 // que no necesitan excepcion explicita.
 function requirePasswordActualizada(req, res, next) {
-    const row = db.prepare("SELECT debe_cambiar_password FROM usuario WHERE id=?").get(req.usuario.id);
-    if (row?.debe_cambiar_password) {
+    if (req.usuario.debe_cambiar_password) {
         return res.status(403).json({ error: "Debes cambiar tu contraseña temporal antes de continuar", debe_cambiar_password: true });
     }
     next();

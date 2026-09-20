@@ -110,6 +110,11 @@ router.delete("/bomberos/:id", (req, res) => {
             });
         }
 
+        const cuenta = db.prepare("SELECT username FROM usuario WHERE bombero_id=?").get(id);
+        if (cuenta) {
+            return conflict(res, `No se puede eliminar: está vinculado a la cuenta "${cuenta.username}". Desvincúlalo (o elimina esa cuenta) primero.`);
+        }
+
         db.transaction(() => {
             // Actas de entrega (historicas o pendientes) que referencian a este bombero:
             // cada acta pertenece a un solo bombero, asi que se borran completas junto a sus PDFs.

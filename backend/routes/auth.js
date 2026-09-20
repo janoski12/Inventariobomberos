@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const db = require("../db");
 const { firmarToken, requireAuth } = require("../lib/auth");
 const { cleanText, badRequest, serverError } = require("../lib/helpers");
+const limiteLogin = require("../lib/limitarLogin");
 
 // Iniciar sesion
 router.post("/auth/login", (req, res) => {
@@ -18,9 +19,26 @@ router.post("/auth/login", (req, res) => {
             LEFT JOIN bombero b ON b.id = usu.bombero_id
             WHERE usu.username = ?
         `).get(username);
-        if (!usuario || !usuario.activo || !bcrypt.compareSync(password, usuario.password_hash))
-            return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
 
+        // Límite de intentos por cuenta (ver lib/limitarLogin.js). Los nombres que no
+        // existen comparten un solo cupo, para que probar nombres al azar no llene la memoria.
+        const cuenta = usuario ? `usuario:${usuario.id}` : "usuario-inexistente";
+        const espera = limiteLogin.msBloqueado(cuenta);
+        if (espera > 0) {
+            const minutos = Math.ceil(espera / 60000);
+            res.set("Retry-After", String(Math.ceil(espera / 1000)));
+            return res.status(429).json({
+                error: `Demasiados intentos fallidos con esta cuenta. Espera ${minutos} minuto${minutos !== 1 ? "s" : ""} antes de volver a intentarlo.`,
+            });
+        }
+
+        if (!usuario || !usuario.activo || !bcrypt.compareSync(password, usuario.password_hash)) {
+            if (limiteLogin.registrarFallo(cuenta))
+                console.warn(`Login bloqueado por ${limiteLogin.MAX_FALLOS} intentos fallidos seguidos: ${usuario ? `cuenta "${usuario.username}"` : "nombres de usuario inexistentes"}`);
+            return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
+        }
+
+        limiteLogin.limpiar(cuenta);
         const token = firmarToken(usuario);
         res.json({
             token,
