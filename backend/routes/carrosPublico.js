@@ -47,11 +47,12 @@ router.post("/carros-publico/:id/revisiones", (req, res) => {
         if (!realizadaPor) return badRequest(res, "Debes indicar tu nombre");
 
         const observacionGeneral = cleanText(req.body.observacion_general);
+        const gaveta = cleanText(req.body.gaveta);
         const items = Array.isArray(req.body.items) ? req.body.items : [];
         if (items.length === 0) return badRequest(res, "No hay ítems para revisar");
 
-        const itemsDelCarro = new Set(
-            db.prepare("SELECT id FROM item WHERE ubicacion_actual_id=?").all(id).map((r) => r.id)
+        const itemsDelCarro = new Map(
+            db.prepare("SELECT id, ubicacion_detalle FROM item WHERE ubicacion_actual_id=?").all(id).map((r) => [r.id, r.ubicacion_detalle])
         );
 
         const filas = [];
@@ -59,6 +60,10 @@ router.post("/carros-publico/:id/revisiones", (req, res) => {
             const itemId = Number(it.item_id);
             if (!Number.isInteger(itemId) || !itemsDelCarro.has(itemId))
                 return badRequest(res, `Ítem inválido o no pertenece a este carro: ${it.item_id}`);
+            // Si la revision es de una gaveta puntual, cada item enviado debe pertenecer a ella
+            // (evita que un envio manipulado mezcle items de otra gaveta bajo esa etiqueta)
+            if (gaveta && itemsDelCarro.get(itemId) !== gaveta)
+                return badRequest(res, `El ítem ${itemId} no pertenece a la gaveta "${gaveta}"`);
             const resultado = cleanText(it.resultado);
             if (!RESULTADOS_REVISION.includes(resultado))
                 return badRequest(res, `Resultado inválido para el ítem ${itemId}. Use: ${RESULTADOS_REVISION.join(", ")}`);
@@ -67,9 +72,9 @@ router.post("/carros-publico/:id/revisiones", (req, res) => {
 
         const nuevoId = db.transaction(() => {
             const revId = db.prepare(`
-                INSERT INTO revision_carro (ubicacion_id, realizada_por, observacion_general)
-                VALUES (?, ?, ?)
-            `).run(id, realizadaPor, observacionGeneral).lastInsertRowid;
+                INSERT INTO revision_carro (ubicacion_id, realizada_por, observacion_general, gaveta)
+                VALUES (?, ?, ?, ?)
+            `).run(id, realizadaPor, observacionGeneral, gaveta).lastInsertRowid;
 
             const insItem = db.prepare(`
                 INSERT INTO revision_carro_item (revision_id, item_id, resultado, observacion)

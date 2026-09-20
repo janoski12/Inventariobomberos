@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { obtenerCarroPublico, enviarRevision } from "../api/carrosPublico";
 
@@ -8,12 +8,17 @@ const OPCIONES = [
   { valor: "FALTANTE", label: "Faltante", cls: "revision-btn revision-btn--falla" },
 ];
 
+// undefined: todavia no elige que revisar. null: eligio "todo el carro". string: una gaveta puntual.
+const SIN_ELEGIR = undefined;
+const TODO_EL_CARRO = null;
+
 export default function RevisionCarroPublica() {
   const { id } = useParams();
   const [carro, setCarro] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
+  const [gavetaElegida, setGavetaElegida] = useState(SIN_ELEGIR);
   const [nombre, setNombre] = useState("");
   const [observacionGeneral, setObservacionGeneral] = useState("");
   const [resultados, setResultados] = useState({}); // item_id -> { resultado, observacion }
@@ -33,6 +38,19 @@ export default function RevisionCarroPublica() {
       .finally(() => setCargando(false));
   }, [id]);
 
+  // Gavetas presentes en este carro, en el orden en que aparecen. Si ningun
+  // item tiene gaveta asignada, no tiene sentido ofrecer el paso de elegir.
+  const gavetasPresentes = useMemo(
+    () => [...new Set((carro?.items ?? []).map((it) => it.ubicacion_detalle).filter(Boolean))],
+    [carro]
+  );
+
+  const itemsAMostrar = useMemo(() => {
+    const items = carro?.items ?? [];
+    if (gavetaElegida === TODO_EL_CARRO || gavetasPresentes.length === 0) return items;
+    return items.filter((it) => it.ubicacion_detalle === gavetaElegida);
+  }, [carro, gavetaElegida, gavetasPresentes]);
+
   function actualizar(itemId, campo, valor) {
     setResultados((p) => ({ ...p, [itemId]: { ...p[itemId], [campo]: valor } }));
   }
@@ -43,14 +61,18 @@ export default function RevisionCarroPublica() {
     try {
       setEnviando(true);
       setErrorEnvio("");
+      const idsAMostrar = new Set(itemsAMostrar.map((it) => it.id));
       await enviarRevision(id, {
         realizada_por: nombre.trim(),
         observacion_general: observacionGeneral.trim() || null,
-        items: Object.entries(resultados).map(([item_id, r]) => ({
-          item_id: Number(item_id),
-          resultado: r.resultado,
-          observacion: r.observacion?.trim() || null,
-        })),
+        gaveta: gavetasPresentes.length === 0 ? null : gavetaElegida,
+        items: Object.entries(resultados)
+          .filter(([item_id]) => idsAMostrar.has(Number(item_id)))
+          .map(([item_id, r]) => ({
+            item_id: Number(item_id),
+            resultado: r.resultado,
+            observacion: r.observacion?.trim() || null,
+          })),
       });
       setEnviado(true);
     } catch (e) {
@@ -59,6 +81,9 @@ export default function RevisionCarroPublica() {
       setEnviando(false);
     }
   }
+
+  // Se pide elegir que revisar solo si hay mas de una gaveta entre las que optar
+  const debeElegirGaveta = gavetasPresentes.length > 0 && gavetaElegida === SIN_ELEGIR;
 
   return (
     <div className="revision-publica">
@@ -71,7 +96,31 @@ export default function RevisionCarroPublica() {
         {cargando && <p className="muted">Cargando...</p>}
         {error && <p className="error">{error}</p>}
 
-        {carro && !enviado && (
+        {carro && carro.items.length === 0 && !enviado && (
+          <>
+            <h2 style={{ marginTop: 0 }}>{carro.nombre}</h2>
+            <p className="muted">Este carro no tiene ítems asignados actualmente.</p>
+          </>
+        )}
+
+        {carro && carro.items.length > 0 && debeElegirGaveta && !enviado && (
+          <>
+            <h2 style={{ marginTop: 0 }}>{carro.nombre}</h2>
+            <p className="muted">¿Qué vas a revisar?</p>
+            <div className="stack">
+              {gavetasPresentes.map((g) => (
+                <button key={g} type="button" className="btn-light" style={{ textAlign: "left" }} onClick={() => setGavetaElegida(g)}>
+                  {g}
+                </button>
+              ))}
+              <button type="button" className="btn-light" style={{ textAlign: "left" }} onClick={() => setGavetaElegida(TODO_EL_CARRO)}>
+                Todo el carro ({carro.items.length} ítems)
+              </button>
+            </div>
+          </>
+        )}
+
+        {carro && carro.items.length > 0 && !debeElegirGaveta && !enviado && (
           <>
             <h2 style={{ marginTop: 0 }}>{carro.nombre}</h2>
             <p className="muted">
@@ -79,6 +128,16 @@ export default function RevisionCarroPublica() {
               Al guardar, esta revisión queda registrada para que el encargado de
               material la revise.
             </p>
+
+            {gavetasPresentes.length > 0 && (
+              <p className="card-detail" style={{ marginTop: -8 }}>
+                Revisando: <strong>{gavetaElegida === TODO_EL_CARRO ? "Todo el carro" : gavetaElegida}</strong>
+                {" · "}
+                <button type="button" className="link-button" onClick={() => setGavetaElegida(SIN_ELEGIR)}>
+                  Cambiar
+                </button>
+              </p>
+            )}
 
             <label className="label">
               Tu nombre
@@ -91,10 +150,10 @@ export default function RevisionCarroPublica() {
             </label>
 
             <div className="stack" style={{ marginTop: 16 }}>
-              {carro.items.length === 0 ? (
-                <p className="muted">Este carro no tiene ítems asignados actualmente.</p>
+              {itemsAMostrar.length === 0 ? (
+                <p className="muted">No hay ítems en esta gaveta.</p>
               ) : (
-                carro.items.map((it) => (
+                itemsAMostrar.map((it) => (
                   <div key={it.id} className="card">
                     <div className="card-title">{it.descripcion}</div>
                     <div className="card-muted">

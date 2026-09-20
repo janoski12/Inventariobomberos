@@ -18,7 +18,7 @@ router.get("/carros", (_req, res) => {
     `).all();
 
     const ultimaRevision = db.prepare(`
-        SELECT id, realizada_por, fecha
+        SELECT id, realizada_por, fecha, gaveta
         FROM revision_carro WHERE ubicacion_id = ?
         ORDER BY fecha DESC, id DESC LIMIT 1
     `);
@@ -47,7 +47,7 @@ router.get("/carros/:id", (req, res) => {
     `).all(id);
 
     const revisiones = db.prepare(`
-        SELECT rc.id, rc.realizada_por, rc.fecha, rc.observacion_general,
+        SELECT rc.id, rc.realizada_por, rc.fecha, rc.observacion_general, rc.gaveta,
                (SELECT COUNT(*) FROM revision_carro_item WHERE revision_id = rc.id AND resultado != 'OK') AS fallas,
                (SELECT COUNT(*) FROM revision_carro_item WHERE revision_id = rc.id) AS total_items
         FROM revision_carro rc

@@ -219,7 +219,10 @@ export default function FichaCarro() {
             <div key={r.id} className="card">
               <div className="spread clickable" onClick={() => toggleRevision(r.id)}>
                 <div>
-                  <div className="card-title">{r.fecha}</div>
+                  <div className="card-title">
+                    {r.fecha}
+                    {r.gaveta && <span className="chip chip--media" style={{ marginLeft: 8 }}>{r.gaveta}</span>}
+                  </div>
                   <div className="card-muted">
                     Realizada por {r.realizada_por} · {r.total_items} ítem{r.total_items !== 1 ? "s" : ""} revisado{r.total_items !== 1 ? "s" : ""}
                   </div>
