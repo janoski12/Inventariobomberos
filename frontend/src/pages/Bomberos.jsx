@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { actualizarBombero, crearBombero, eliminarBombero, listarBomberos } from "../api/bomberos";
 import Modal from "../components/Modal";
+import SearchBar from "../components/SearchBar";
 import { useDialog } from "../context/DialogContext";
 import { useAuth } from "../context/AuthContext";
 
@@ -13,6 +14,19 @@ const CARGOS = [
 ];
 
 const FORM_VACIO = { nombre: "", cargo: "", estado: "ACTIVO", observaciones: "", rut: "", numero_registro: "" };
+
+// Valor del filtro de cargo para los bomberos que no tienen ninguno
+const SIN_CARGO = "__SIN_CARGO__";
+
+// Minúsculas y sin tildes, para que "acuna" encuentre "Acuña"
+function normalizar(texto) {
+  return String(texto ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+// Sin puntos, guion ni espacios, para que "20366824" encuentre "20.366.824-4"
+function compactar(texto) {
+  return normalizar(texto).replace(/[.\-\s]/g, "");
+}
 
 function CampoCargo({ value, onChange }) {
   return (
@@ -64,6 +78,43 @@ export default function Bomberos() {
   const [form, setForm]         = useState(FORM_VACIO);
   const [openEdit, setOpenEdit] = useState(false);
   const [edit, setEdit]         = useState(null);
+  const [q, setQ]                       = useState("");
+  const [filtroCargo, setFiltroCargo]   = useState("");
+
+  // Cargos que de verdad hay en el listado, en orden jerárquico (los que no
+  // están en CARGOS, p.ej. venidos de una importación, van al final)
+  const cargosPresentes = useMemo(() => {
+    const presentes = new Set(lista.map((b) => b.cargo).filter(Boolean));
+    const conocidos = CARGOS.filter((c) => presentes.has(c));
+    const otros = [...presentes].filter((c) => !CARGOS.includes(c)).sort();
+    return [...conocidos, ...otros];
+  }, [lista]);
+  const haySinCargo = useMemo(() => lista.some((b) => !b.cargo), [lista]);
+
+  // Si el cargo elegido dejó de existir (p.ej. se editó al único bombero que lo
+  // tenía), el filtro se ignora en vez de dejar la lista vacía sin explicación
+  const cargoEfectivo =
+    filtroCargo === SIN_CARGO ? (haySinCargo ? SIN_CARGO : "")
+    : cargosPresentes.includes(filtroCargo) ? filtroCargo : "";
+
+  const hayFiltros = q.trim() !== "" || cargoEfectivo !== "";
+
+  const listaFiltrada = useMemo(() => {
+    const texto = normalizar(q.trim());
+    const textoCompacto = compactar(q);
+    return lista.filter((b) => {
+      if (cargoEfectivo === SIN_CARGO && b.cargo) return false;
+      if (cargoEfectivo && cargoEfectivo !== SIN_CARGO && b.cargo !== cargoEfectivo) return false;
+      if (!texto) return true;
+      const campos = normalizar(`${b.nombre} ${b.cargo ?? ""} ${b.rut ?? ""} ${b.numero_registro ?? ""}`);
+      return campos.includes(texto) || (textoCompacto !== "" && compactar(b.rut).includes(textoCompacto));
+    });
+  }, [lista, q, cargoEfectivo]);
+
+  function limpiarFiltros() {
+    setQ("");
+    setFiltroCargo("");
+  }
 
   async function cargar() {
     setError("");
@@ -202,12 +253,42 @@ export default function Bomberos() {
       {cargando && <p className="muted">Cargando…</p>}
       {error    && <p className="error">{error}</p>}
 
+      {lista.length > 0 && (
+        <>
+          <SearchBar value={q} onChange={setQ} placeholder="Busca por nombre, RUT o N° de registro..." />
+          <div className="filtros" style={{ marginTop: 10 }}>
+            <select
+              className={`filtro-select${cargoEfectivo ? " filtro-activo" : ""}`}
+              value={cargoEfectivo}
+              onChange={(e) => setFiltroCargo(e.target.value)}
+            >
+              <option value="">Todos los cargos</option>
+              {cargosPresentes.map((c) => <option key={c} value={c}>{c}</option>)}
+              {haySinCargo && <option value={SIN_CARGO}>Sin cargo</option>}
+            </select>
+
+            {hayFiltros && (
+              <button className="btn-clear-filtros" onClick={limpiarFiltros}>
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+
+          <p className="muted" style={{ marginTop: 8 }}>
+            {hayFiltros ? `${listaFiltrada.length} de ${lista.length}` : lista.length} bombero{lista.length !== 1 ? "s" : ""}
+          </p>
+        </>
+      )}
+
       <div className="stack">
-        {lista.map((b) => (
+        {listaFiltrada.map((b) => (
           <BomberoCard key={b.id} bombero={b} esAdmin={esAdmin} deshabilitado={guardando}
             onEditar={() => abrirEdicion(b)} onEliminar={() => eliminar(b)} />
         ))}
       </div>
+      {lista.length > 0 && listaFiltrada.length === 0 && (
+        <p className="muted">Ningún bombero coincide con la búsqueda o el filtro.</p>
+      )}
 
       {/* ── MODAL EDITAR ── */}
       <Modal open={openEdit} title="Editar bombero" onClose={() => setOpenEdit(false)}>
