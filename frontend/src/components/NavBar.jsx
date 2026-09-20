@@ -14,12 +14,14 @@ const LINKS = [
     { to: "/importar", label: "Importar" },
 ];
 
-export default function NavBar({ esAdmin }) {
+export default function NavBar({ esAdmin, bomberoId }) {
     const [open, setOpen] = useState(false);
     const cls       = ({ isActive }) => "nav-link" + (isActive ? " nav-link--active" : "");
     const clsDrawer = ({ isActive }) => "nav-drawer-link" + (isActive ? " nav-drawer-link--active" : "");
 
-    const links = esAdmin ? [...LINKS, { to: "/usuarios", label: "Usuarios" }] : LINKS;
+    let links = LINKS;
+    if (bomberoId) links = [...links, { to: `/bomberos/${bomberoId}`, label: "Mi ficha" }];
+    if (esAdmin)   links = [...links, { to: "/usuarios", label: "Usuarios" }];
 
     return (
         <>

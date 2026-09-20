@@ -235,6 +235,86 @@ describe("Protección del último administrador", () => {
     });
 });
 
+describe("Vínculo entre usuario y bombero", () => {
+    let bomberoId, otroBomberoId, usuarioId;
+
+    test("preparar dos bomberos de prueba", async () => {
+        const b1 = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero Vinculo 1" });
+        const b2 = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero Vinculo 2" });
+        bomberoId = b1.body.id;
+        otroBomberoId = b2.body.id;
+    });
+
+    test("crear un usuario con bombero_id inexistente → 404", async () => {
+        const res = await request(app).post("/api/usuarios").set(auth(adminToken))
+            .send({ username: "vinc_404", bombero_id: 999999 });
+        assert.equal(res.status, 404);
+    });
+
+    test("crear un usuario vinculado a un bombero → aparece en el listado", async () => {
+        const res = await request(app).post("/api/usuarios").set(auth(adminToken))
+            .send({ username: "vinc_ok", nombre: "Vinculado Ok", bombero_id: bomberoId });
+        assert.equal(res.status, 201);
+        usuarioId = res.body.id;
+
+        const lista = await request(app).get("/api/usuarios").set(auth(adminToken));
+        const fila = lista.body.find(u => u.id === usuarioId);
+        assert.equal(fila.bombero_id, bomberoId);
+        assert.equal(fila.bombero_nombre, "Bombero Vinculo 1");
+    });
+
+    test("no se puede vincular dos usuarios al mismo bombero → 409", async () => {
+        const res = await request(app).post("/api/usuarios").set(auth(adminToken))
+            .send({ username: "vinc_dup", bombero_id: bomberoId });
+        assert.equal(res.status, 409);
+    });
+
+    test("re-guardar el mismo usuario con su propio bombero_id no genera un 409 falso", async () => {
+        const res = await request(app).put(`/api/usuarios/${usuarioId}`).set(auth(adminToken))
+            .send({ nombre: "Vinculado Ok Editado", bombero_id: bomberoId });
+        assert.equal(res.status, 200);
+    });
+
+    test("no se puede robarle a otro usuario su bombero vinculado → 409", async () => {
+        const otro = await request(app).post("/api/usuarios").set(auth(adminToken))
+            .send({ username: "vinc_otro", bombero_id: otroBomberoId });
+        const res = await request(app).put(`/api/usuarios/${otro.body.id}`).set(auth(adminToken))
+            .send({ bombero_id: bomberoId });
+        assert.equal(res.status, 409);
+    });
+
+    test("PUT con bombero_id: null desvincula", async () => {
+        const res = await request(app).put(`/api/usuarios/${usuarioId}`).set(auth(adminToken))
+            .send({ bombero_id: null });
+        assert.equal(res.status, 200);
+
+        const lista = await request(app).get("/api/usuarios").set(auth(adminToken));
+        const fila = lista.body.find(u => u.id === usuarioId);
+        assert.equal(fila.bombero_id, null);
+
+        // una vez libre, otro usuario sí puede vincularse a ese bombero
+        const otro = await request(app).post("/api/usuarios").set(auth(adminToken))
+            .send({ username: "vinc_libre", bombero_id: bomberoId });
+        assert.equal(otro.status, 201);
+    });
+
+    test("login y /auth/me devuelven bombero_id y bombero_nombre cuando hay vínculo", async () => {
+        const bomberoLogin = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero Vinculo Login" });
+        const creado = await request(app).post("/api/usuarios").set(auth(adminToken))
+            .send({ username: "vinc_login", bombero_id: bomberoLogin.body.id });
+        assert.equal(creado.status, 201);
+
+        const login = await request(app).post("/api/auth/login")
+            .send({ username: "vinc_login", password: creado.body.password_temporal });
+        assert.equal(login.body.usuario.bombero_id, bomberoLogin.body.id);
+        assert.equal(login.body.usuario.bombero_nombre, "Bombero Vinculo Login");
+
+        const me = await request(app).get("/api/auth/me").set(auth(login.body.token));
+        assert.equal(me.body.bombero_id, bomberoLogin.body.id);
+        assert.equal(me.body.bombero_nombre, "Bombero Vinculo Login");
+    });
+});
+
 describe("Trazabilidad atribuida al usuario logueado", () => {
     test("mover un ítem registra el movimiento a nombre del usuario", async () => {
         const ubic = await request(app).post("/api/ubicaciones").set(auth(adminToken))

@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { listarUsuarios, crearUsuario, actualizarUsuario, eliminarUsuario } from "../api/auth";
+import { listarBomberos } from "../api/bomberos";
 import { useAuth } from "../context/AuthContext";
 import { useDialog } from "../context/DialogContext";
 import Modal from "../components/Modal";
 import { copiarAlPortapapeles } from "../utils/clipboard";
 
 const ROLES = ["ADMIN", "OPERADOR"];
-const FORM_VACIO = { username: "", nombre: "", rol: "OPERADOR" };
+const FORM_VACIO = { username: "", nombre: "", rol: "OPERADOR", bombero_id: "" };
 
 function UsuarioCard({ usuario: u, esActual, deshabilitado, onEditar, onEliminar }) {
   return (
@@ -20,6 +21,7 @@ function UsuarioCard({ usuario: u, esActual, deshabilitado, onEditar, onEliminar
             {esActual && <span className="chip chip--media">tú</span>}
           </div>
           <div className="card-muted" style={{ marginTop: 4 }}>{u.nombre ?? "Sin nombre"}</div>
+          {u.bombero_nombre && <div className="card-muted" style={{ marginTop: 2 }}>Bombero: {u.bombero_nombre}</div>}
         </div>
         <div className="row">
           <button className="btn-light" onClick={onEditar}>Editar</button>
@@ -36,6 +38,7 @@ export default function Usuarios() {
   const { usuario: actual } = useAuth();
   const { toast, confirm }  = useDialog();
   const [lista, setLista]       = useState([]);
+  const [bomberos, setBomberos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError]       = useState("");
   const [guardando, setGuardando] = useState(false);
@@ -53,7 +56,19 @@ export default function Usuarios() {
     finally { setCargando(false); }
   }
 
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => {
+    cargar();
+    listarBomberos().then(setBomberos).catch(() => {});
+  }, []);
+
+  // Bomberos que ya estan vinculados a OTRA cuenta (no se ofrecen para vincular de nuevo).
+  // Al editar, el propio bombero vinculado a esta cuenta debe seguir apareciendo.
+  function bomberosDisponibles(usuarioIdActual) {
+    const vinculados = new Set(
+      lista.filter((u) => u.bombero_id && u.id !== usuarioIdActual).map((u) => u.bombero_id)
+    );
+    return bomberos.filter((b) => !vinculados.has(b.id));
+  }
 
   // Centraliza el ciclo guardando/errores de las acciones contra la API
   async function conGuardando(accion) {
@@ -73,7 +88,10 @@ export default function Usuarios() {
   function crear() {
     const username = form.username.trim();
     return conGuardando(async () => {
-      const data = await crearUsuario({ username, nombre: form.nombre.trim() || null, rol: form.rol });
+      const data = await crearUsuario({
+        username, nombre: form.nombre.trim() || null, rol: form.rol,
+        bombero_id: form.bombero_id || null,
+      });
       setForm(FORM_VACIO);
       await cargar();
       setTempInfo({ username, password: data.password_temporal });
@@ -81,13 +99,16 @@ export default function Usuarios() {
   }
 
   function abrirEdicion(u) {
-    setEdit({ id: u.id, username: u.username, nombre: u.nombre ?? "", rol: u.rol, activo: u.activo, password: "" });
+    setEdit({
+      id: u.id, username: u.username, nombre: u.nombre ?? "", rol: u.rol, activo: u.activo, password: "",
+      bombero_id: u.bombero_id ?? "",
+    });
     setOpenEdit(true);
   }
 
   function guardarEdicion() {
     return conGuardando(async () => {
-      const payload = { nombre: edit.nombre.trim() || null, rol: edit.rol, activo: edit.activo };
+      const payload = { nombre: edit.nombre.trim() || null, rol: edit.rol, activo: edit.activo, bombero_id: edit.bombero_id || null };
       if (edit.password) payload.password = edit.password;
       await actualizarUsuario(edit.id, payload);
       await cargar();
@@ -140,6 +161,13 @@ export default function Usuarios() {
               {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </label>
+          <label className="label">
+            Bombero vinculado (opcional)
+            <select className="input" value={form.bombero_id} onChange={campoForm("bombero_id")}>
+              <option value="">Sin vincular</option>
+              {bomberosDisponibles(null).map(b => <option key={b.id} value={b.id}>{b.nombre}</option>)}
+            </select>
+          </label>
         </div>
         <p className="muted" style={{ marginTop: 10 }}>
           La contraseña la genera el sistema: se muestra una sola vez al crear la cuenta.
@@ -189,6 +217,13 @@ export default function Usuarios() {
                 </select>
               </label>
             </div>
+            <label className="label">
+              Bombero vinculado (opcional)
+              <select className="input" value={edit.bombero_id} onChange={campoEdit("bombero_id")}>
+                <option value="">Sin vincular</option>
+                {bomberosDisponibles(edit.id).map(b => <option key={b.id} value={b.id}>{b.nombre}</option>)}
+              </select>
+            </label>
             <label className="label">
               Nueva contraseña (opcional)
               <input className="input" type="password" value={edit.password} onChange={campoEdit("password")}

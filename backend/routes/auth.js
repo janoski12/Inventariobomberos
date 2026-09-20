@@ -12,7 +12,12 @@ router.post("/auth/login", (req, res) => {
 
         if (!username || !password) return badRequest(res, "Usuario y contraseña son requeridos");
 
-        const usuario = db.prepare("SELECT * FROM usuario WHERE username = ?").get(username);
+        const usuario = db.prepare(`
+            SELECT usu.*, b.nombre AS bombero_nombre
+            FROM usuario usu
+            LEFT JOIN bombero b ON b.id = usu.bombero_id
+            WHERE usu.username = ?
+        `).get(username);
         if (!usuario || !usuario.activo || !bcrypt.compareSync(password, usuario.password_hash))
             return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
 
@@ -22,6 +27,7 @@ router.post("/auth/login", (req, res) => {
             usuario: {
                 id: usuario.id, username: usuario.username, nombre: usuario.nombre, rol: usuario.rol,
                 debe_cambiar_password: !!usuario.debe_cambiar_password,
+                bombero_id: usuario.bombero_id, bombero_nombre: usuario.bombero_nombre,
             },
         });
     } catch (e) {
@@ -31,11 +37,18 @@ router.post("/auth/login", (req, res) => {
 
 // Datos del usuario autenticado (valida que el token siga vivo)
 router.get("/auth/me", requireAuth, (req, res) => {
-    const usuario = db.prepare("SELECT id, username, nombre, rol, activo, debe_cambiar_password FROM usuario WHERE id = ?").get(req.usuario.id);
+    const usuario = db.prepare(`
+        SELECT usu.id, usu.username, usu.nombre, usu.rol, usu.activo, usu.debe_cambiar_password,
+               usu.bombero_id, b.nombre AS bombero_nombre
+        FROM usuario usu
+        LEFT JOIN bombero b ON b.id = usu.bombero_id
+        WHERE usu.id = ?
+    `).get(req.usuario.id);
     if (!usuario || !usuario.activo) return res.status(401).json({ error: "Sesión inválida" });
     res.json({
         id: usuario.id, username: usuario.username, nombre: usuario.nombre, rol: usuario.rol,
         debe_cambiar_password: !!usuario.debe_cambiar_password,
+        bombero_id: usuario.bombero_id, bombero_nombre: usuario.bombero_nombre,
     });
 });
 
