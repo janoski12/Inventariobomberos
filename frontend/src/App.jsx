@@ -59,7 +59,7 @@ function AppAutenticada() {
         </div>
       </header>
       <CambiarPassword open={openPassword} onClose={() => setOpenPassword(false)} />
-      <NavBar esAdmin={esAdmin} />
+      <NavBar esAdmin={esAdmin} bomberoId={usuario.bombero_id} />
       <main className="app-content">
         <Routes>
           <Route path="/" element={<BusquedaItems />} />

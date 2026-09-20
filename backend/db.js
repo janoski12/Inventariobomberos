@@ -65,6 +65,13 @@ try { db.exec("ALTER TABLE acta_entrega ADD COLUMN tipo TEXT NOT NULL DEFAULT 'E
 try { db.exec("ALTER TABLE acta_entrega ADD COLUMN ubicacion_destino_id INTEGER"); } catch {}
 try { db.exec("ALTER TABLE acta_entrega ADD COLUMN ubicacion_destino_detalle TEXT"); } catch {}
 
+// Migracion: vincula opcionalmente una cuenta de usuario con su registro de
+// bombero (identificar quien es quien, y el atajo "Mi ficha"). Un bombero
+// solo puede estar vinculado a una cuenta (indice unico parcial, mismo
+// patron que idx_bombero_rut/idx_bombero_registro).
+try { db.exec("ALTER TABLE usuario ADD COLUMN bombero_id INTEGER REFERENCES bombero(id)"); } catch {}
+try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_usuario_bombero ON usuario(bombero_id) WHERE bombero_id IS NOT NULL"); } catch {}
+
 // La tabla asignacion_pendiente (un item por acta) se reemplazo por acta_entrega +
 // acta_entrega_item (varios items por acta). No hubo datos reales en producción
 // bajo el modelo anterior, asi que se descarta en vez de migrarla.
