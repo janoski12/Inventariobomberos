@@ -1,7 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { obtenerCarro, obtenerRevision, descargarQRRevision } from "../api/carros";
 import { useDialog } from "../context/DialogContext";
+import SearchBar from "../components/SearchBar";
+
+// Valores únicos ya presentes en esta lista de ítems, en el orden en que
+// aparecen por primera vez (para no ofrecer, p.ej., filtrar por TRAUMA en un
+// carro que no tiene ningún ítem de esa categoría)
+function valoresPresentes(items, campo) {
+  return [...new Set(items.map((it) => it[campo]).filter(Boolean))];
+}
 
 const CHIP_ESTADO = {
   OPERATIVO:      "chip chip--operativo",
@@ -27,6 +35,40 @@ export default function FichaCarro() {
   const [revisionAbierta, setRevisionAbierta] = useState(null);
   const [detalleRevision, setDetalleRevision] = useState(null);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
+
+  const [q, setQ] = useState("");
+  const [filtroEstado, setFiltroEstado] = useState("");
+  const [filtroCategoria, setFiltroCategoria] = useState("");
+  const [filtroCriticidad, setFiltroCriticidad] = useState("");
+  const [filtroGaveta, setFiltroGaveta] = useState("");
+
+  const items = useMemo(() => carro?.items ?? [], [carro]);
+  const estadosPresentes     = useMemo(() => valoresPresentes(items, "estado"), [items]);
+  const categoriasPresentes  = useMemo(() => valoresPresentes(items, "categoria"), [items]);
+  const criticidadesPresentes= useMemo(() => valoresPresentes(items, "criticidad"), [items]);
+  const gavetasPresentes     = useMemo(() => valoresPresentes(items, "ubicacion_detalle").sort(), [items]);
+
+  const hayFiltros = q.trim() || filtroEstado || filtroCategoria || filtroCriticidad || filtroGaveta;
+
+  const itemsFiltrados = useMemo(() => {
+    const texto = q.trim().toLowerCase();
+    return items.filter((it) => {
+      if (texto && !`${it.codigo} ${it.descripcion}`.toLowerCase().includes(texto)) return false;
+      if (filtroEstado      && it.estado !== filtroEstado) return false;
+      if (filtroCategoria   && it.categoria !== filtroCategoria) return false;
+      if (filtroCriticidad  && it.criticidad !== filtroCriticidad) return false;
+      if (filtroGaveta      && it.ubicacion_detalle !== filtroGaveta) return false;
+      return true;
+    });
+  }, [items, q, filtroEstado, filtroCategoria, filtroCriticidad, filtroGaveta]);
+
+  function limpiarFiltros() {
+    setQ("");
+    setFiltroEstado("");
+    setFiltroCategoria("");
+    setFiltroCriticidad("");
+    setFiltroGaveta("");
+  }
 
   useEffect(() => {
     setCargando(true);
@@ -83,30 +125,89 @@ export default function FichaCarro() {
       {carro.responsable && <p className="muted">Responsable: {carro.responsable}</p>}
 
       <h3 style={{ marginTop: 22 }}>Ítems en este carro</h3>
-      {carro.items.length === 0 ? (
+      {items.length === 0 ? (
         <p className="muted">No hay ítems asignados a este carro.</p>
       ) : (
-        <div className="stack">
-          {carro.items.map((it) => (
-            <Link key={it.id} to={`/items/${it.id}`} style={{ textDecoration: "none" }}>
-              <div className="card clickable">
-                <div className="spread">
-                  <div>
-                    <span className="item-code">{it.codigo}</span>
-                    <span className="item-desc">{it.descripcion}</span>
+        <>
+          <SearchBar value={q} onChange={setQ} placeholder="Busca por código o descripción..." />
+          <div className="filtros" style={{ marginTop: 10 }}>
+            <select
+              className={`filtro-select${filtroEstado ? " filtro-activo" : ""}`}
+              value={filtroEstado}
+              onChange={(e) => setFiltroEstado(e.target.value)}
+            >
+              <option value="">Todos los estados</option>
+              {estadosPresentes.map((e) => <option key={e} value={e}>{e.replace("_", " ")}</option>)}
+            </select>
+
+            {categoriasPresentes.length > 1 && (
+              <select
+                className={`filtro-select${filtroCategoria ? " filtro-activo" : ""}`}
+                value={filtroCategoria}
+                onChange={(e) => setFiltroCategoria(e.target.value)}
+              >
+                <option value="">Todas las categorías</option>
+                {categoriasPresentes.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            )}
+
+            <select
+              className={`filtro-select${filtroCriticidad ? " filtro-activo" : ""}`}
+              value={filtroCriticidad}
+              onChange={(e) => setFiltroCriticidad(e.target.value)}
+            >
+              <option value="">Todas las criticidades</option>
+              {criticidadesPresentes.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+
+            {gavetasPresentes.length > 0 && (
+              <select
+                className={`filtro-select${filtroGaveta ? " filtro-activo" : ""}`}
+                value={filtroGaveta}
+                onChange={(e) => setFiltroGaveta(e.target.value)}
+              >
+                <option value="">Todas las gavetas</option>
+                {gavetasPresentes.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
+            )}
+
+            {hayFiltros && (
+              <button className="btn-clear-filtros" onClick={limpiarFiltros}>
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+
+          <p className="muted" style={{ marginTop: 8 }}>
+            {hayFiltros ? `${itemsFiltrados.length} de ${items.length} ítem(s)` : `${items.length} ítem(s)`}
+          </p>
+
+          {itemsFiltrados.length === 0 ? (
+            <p className="muted">Ningún ítem coincide con la búsqueda o los filtros.</p>
+          ) : (
+            <div className="stack">
+              {itemsFiltrados.map((it) => (
+                <Link key={it.id} to={`/items/${it.id}`} style={{ textDecoration: "none" }}>
+                  <div className="card clickable">
+                    <div className="spread">
+                      <div>
+                        <span className="item-code">{it.codigo}</span>
+                        <span className="item-desc">{it.descripcion}</span>
+                      </div>
+                      <div className="row" style={{ gap: 6 }}>
+                        <span className={CHIP_ESTADO[it.estado] ?? "chip"}>{it.estado.replace("_", " ")}</span>
+                      </div>
+                    </div>
+                    <div className="card-detail">
+                      {it.ubicacion_detalle ? <b>{it.ubicacion_detalle}</b> : <span className="muted">Sin gaveta/compartimiento indicado</span>}
+                      {(it.marca || it.modelo) ? ` · ${[it.marca, it.modelo].filter(Boolean).join(" / ")}` : ""}
+                    </div>
                   </div>
-                  <div className="row" style={{ gap: 6 }}>
-                    <span className={CHIP_ESTADO[it.estado] ?? "chip"}>{it.estado.replace("_", " ")}</span>
-                  </div>
-                </div>
-                <div className="card-detail">
-                  {it.ubicacion_detalle ? <b>{it.ubicacion_detalle}</b> : <span className="muted">Sin gaveta/compartimiento indicado</span>}
-                  {(it.marca || it.modelo) ? ` · ${[it.marca, it.modelo].filter(Boolean).join(" / ")}` : ""}
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       <h3 style={{ marginTop: 22 }}>Historial de revisiones</h3>
