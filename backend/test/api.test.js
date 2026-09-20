@@ -410,6 +410,71 @@ describe("Vínculo entre usuario y bombero", () => {
     });
 });
 
+describe("Correo de la cuenta de usuario", () => {
+    const crear = (body) => request(app).post("/api/usuarios").set(auth(adminToken)).send(body);
+    const editar = (id, body) => request(app).put(`/api/usuarios/${id}`).set(auth(adminToken)).send(body);
+    const fila = async (id) => (await request(app).get("/api/usuarios").set(auth(adminToken))).body.find((u) => u.id === id);
+
+    test("se guarda normalizado (sin espacios, en minúsculas) y aparece en el listado", async () => {
+        const res = await crear({ username: "correo_ok", correo: "  Ana.Perez@Gmail.COM " });
+        assert.equal(res.status, 201);
+        assert.equal((await fila(res.body.id)).correo, "ana.perez@gmail.com");
+    });
+
+    test("el correo es opcional: sin él la cuenta queda con correo null", async () => {
+        const res = await crear({ username: "correo_ninguno" });
+        assert.equal(res.status, 201);
+        assert.equal((await fila(res.body.id)).correo, null);
+
+        const vacio = await crear({ username: "correo_vacio", correo: "   " });
+        assert.equal(vacio.status, 201);
+        assert.equal((await fila(vacio.body.id)).correo, null);
+    });
+
+    test("un correo con formato inválido → 400, al crear y al editar", async () => {
+        for (const malo of ["sin-arroba", "a@b", "con espacio@dominio.cl", "@dominio.cl", `${"a".repeat(250)}@dominio.cl`]) {
+            const res = await crear({ username: "correo_malo", correo: malo });
+            assert.equal(res.status, 400, `debió rechazar "${malo.slice(0, 30)}"`);
+        }
+        const cuenta = await crear({ username: "correo_edit_malo" });
+        assert.equal((await editar(cuenta.body.id, { correo: "esto no es un correo" })).status, 400);
+    });
+
+    test("no se puede repetir entre cuentas (sin distinguir mayúsculas) → 409 que nombra la cuenta", async () => {
+        await crear({ username: "correo_dueno", correo: "unico@bomberos.cl" });
+
+        const dup = await crear({ username: "correo_copia", correo: "UNICO@bomberos.cl" });
+        assert.equal(dup.status, 409);
+        assert.match(dup.body.error, /correo_dueno/);
+
+        const otra = await crear({ username: "correo_otra" });
+        const robo = await editar(otra.body.id, { correo: "unico@bomberos.cl" });
+        assert.equal(robo.status, 409);
+    });
+
+    test("re-guardar la misma cuenta con su propio correo no da un 409 falso", async () => {
+        const cuenta = await crear({ username: "correo_propio", correo: "propio@bomberos.cl" });
+        const res = await editar(cuenta.body.id, { nombre: "Nombre Nuevo", correo: "propio@bomberos.cl" });
+        assert.equal(res.status, 200);
+    });
+
+    test("editar sin el campo lo conserva; con null o vacío lo borra y deja el correo libre", async () => {
+        const cuenta = await crear({ username: "correo_ciclo", correo: "ciclo@bomberos.cl" });
+
+        await editar(cuenta.body.id, { nombre: "Solo cambio el nombre" });
+        assert.equal((await fila(cuenta.body.id)).correo, "ciclo@bomberos.cl", "no enviarlo no debe borrarlo");
+
+        assert.equal((await editar(cuenta.body.id, { correo: null })).status, 200);
+        assert.equal((await fila(cuenta.body.id)).correo, null);
+
+        const otra = await crear({ username: "correo_reutiliza", correo: "ciclo@bomberos.cl" });
+        assert.equal(otra.status, 201, "una vez libre, otra cuenta puede usarlo");
+
+        assert.equal((await editar(otra.body.id, { correo: "" })).status, 200);
+        assert.equal((await fila(otra.body.id)).correo, null);
+    });
+});
+
 describe("Trazabilidad atribuida al usuario logueado", () => {
     test("mover un ítem registra el movimiento a nombre del usuario", async () => {
         const ubic = await request(app).post("/api/ubicaciones").set(auth(adminToken))

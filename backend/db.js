@@ -72,6 +72,12 @@ try { db.exec("ALTER TABLE acta_entrega ADD COLUMN ubicacion_destino_detalle TEX
 try { db.exec("ALTER TABLE usuario ADD COLUMN bombero_id INTEGER REFERENCES bombero(id)"); } catch {}
 try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_usuario_bombero ON usuario(bombero_id) WHERE bombero_id IS NOT NULL"); } catch {}
 
+// Migracion: correo de contacto de la cuenta (opcional). Se guarda en minusculas
+// y no puede repetirse entre cuentas (mismo patron de indice unico parcial que
+// idx_usuario_bombero).
+try { db.exec("ALTER TABLE usuario ADD COLUMN correo TEXT"); } catch {}
+try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_usuario_correo ON usuario(correo) WHERE correo IS NOT NULL"); } catch {}
+
 // Migracion: revision de una sola gaveta/compartimiento del carro, en vez del
 // carro completo. NULL significa que la revision cubrio el carro completo.
 try { db.exec("ALTER TABLE revision_carro ADD COLUMN gaveta TEXT"); } catch {}

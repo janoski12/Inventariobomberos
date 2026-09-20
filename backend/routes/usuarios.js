@@ -2,7 +2,7 @@ const router = require("express").Router();
 const bcrypt = require("bcryptjs");
 const db = require("../db");
 const { requireAuth, requireAdmin } = require("../lib/auth");
-const { isNil, cleanText, badRequest, notFound, conflict, serverError, generarPasswordTemporal } = require("../lib/helpers");
+const { isNil, cleanText, badRequest, notFound, conflict, serverError, generarPasswordTemporal, esCorreoValido } = require("../lib/helpers");
 
 const ROLES = ["ADMIN", "OPERADOR"];
 
@@ -27,10 +27,28 @@ function validarBomberoVinculado(res, bombero_id, usuarioIdActual) {
     return { ok: true, value: bombero_id };
 }
 
+// Valida el correo opcional de una cuenta. Se guarda sin espacios y en
+// minúsculas, y no puede estar en uso por OTRA cuenta. Igual que el vínculo con
+// bombero: si algo no es válido ya responde el error y devuelve ok:false.
+function validarCorreo(res, crudo, usuarioIdActual) {
+    const correo = cleanText(crudo)?.toLowerCase() ?? null;
+    if (correo === null) return { ok: true, value: null };
+    if (!esCorreoValido(correo)) {
+        badRequest(res, "El correo no es válido");
+        return { ok: false };
+    }
+    const enUso = db.prepare("SELECT username FROM usuario WHERE correo=? AND id != ?").get(correo, usuarioIdActual ?? -1);
+    if (enUso) {
+        conflict(res, `Ese correo ya está registrado en la cuenta "${enUso.username}"`);
+        return { ok: false };
+    }
+    return { ok: true, value: correo };
+}
+
 // Listar usuarios (sin el hash)
 router.get("/usuarios", (_req, res) => {
     const rows = db.prepare(`
-        SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.creado_en,
+        SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.creado_en, u.correo,
                u.bombero_id, b.nombre AS bombero_nombre
         FROM usuario u
         LEFT JOIN bombero b ON b.id = u.bombero_id
@@ -59,16 +77,19 @@ router.post("/usuarios", (req, res) => {
         const vinculo = validarBomberoVinculado(res, bombero_id, null);
         if (!vinculo.ok) return;
 
+        const correo = validarCorreo(res, req.body.correo, null);
+        if (!correo.ok) return;
+
         const passwordTemporal = generarPasswordTemporal();
-        const info = db.prepare("INSERT INTO usuario (username, password_hash, nombre, rol, debe_cambiar_password, bombero_id) VALUES (?, ?, ?, ?, 1, ?)")
-            .run(username, bcrypt.hashSync(passwordTemporal, 10), nombre ?? null, rol, vinculo.value);
+        const info = db.prepare("INSERT INTO usuario (username, password_hash, nombre, rol, debe_cambiar_password, bombero_id, correo) VALUES (?, ?, ?, ?, 1, ?, ?)")
+            .run(username, bcrypt.hashSync(passwordTemporal, 10), nombre ?? null, rol, vinculo.value, correo.value);
         res.status(201).json({ id: info.lastInsertRowid, password_temporal: passwordTemporal });
     } catch (e) {
         return serverError(res, e, "Error creando usuario");
     }
 });
 
-// Editar usuario (nombre, rol, activo y opcionalmente password)
+// Editar usuario (nombre, rol, activo, correo, bombero vinculado y opcionalmente password)
 router.put("/usuarios/:id", (req, res) => {
     try {
         const id = Number(req.params.id);
@@ -98,14 +119,18 @@ router.put("/usuarios/:id", (req, res) => {
         const vinculo = validarBomberoVinculado(res, bombero_id, id);
         if (!vinculo.ok) return;
 
+        // Sin el campo en el body se conserva el correo actual; null o "" lo borra
+        const correo = req.body.correo === undefined ? { ok: true, value: actual.correo } : validarCorreo(res, req.body.correo, id);
+        if (!correo.ok) return;
+
         if (password !== undefined && password !== null && password !== "") {
             if (String(password).length < 6) return badRequest(res, "La contraseña debe tener al menos 6 caracteres");
             // Una clave puesta por un admin tambien es "temporal": se exige cambiarla en el proximo ingreso
             db.prepare("UPDATE usuario SET password_hash = ?, debe_cambiar_password = 1 WHERE id = ?").run(bcrypt.hashSync(password, 10), id);
         }
 
-        db.prepare("UPDATE usuario SET nombre = ?, rol = ?, activo = ?, bombero_id = ? WHERE id = ?")
-            .run(nombre ?? actual.nombre, rol, activo, vinculo.value, id);
+        db.prepare("UPDATE usuario SET nombre = ?, rol = ?, activo = ?, bombero_id = ?, correo = ? WHERE id = ?")
+            .run(nombre ?? actual.nombre, rol, activo, vinculo.value, correo.value, id);
         res.json({ ok: true });
     } catch (e) {
         return serverError(res, e, "Error actualizando usuario");

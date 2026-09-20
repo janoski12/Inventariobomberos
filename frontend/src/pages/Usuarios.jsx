@@ -7,7 +7,7 @@ import Modal from "../components/Modal";
 import { copiarAlPortapapeles } from "../utils/clipboard";
 
 const ROLES = ["ADMIN", "OPERADOR"];
-const FORM_VACIO = { username: "", nombre: "", rol: "OPERADOR", bombero_id: "" };
+const FORM_VACIO = { username: "", nombre: "", correo: "", rol: "OPERADOR", bombero_id: "" };
 
 function UsuarioCard({ usuario: u, esActual, deshabilitado, onEditar, onEliminar }) {
   return (
@@ -21,6 +21,7 @@ function UsuarioCard({ usuario: u, esActual, deshabilitado, onEditar, onEliminar
             {esActual && <span className="chip chip--media">tú</span>}
           </div>
           <div className="card-muted" style={{ marginTop: 4 }}>{u.nombre ?? "Sin nombre"}</div>
+          {u.correo && <div className="card-muted" style={{ marginTop: 2 }}>{u.correo}</div>}
           {u.bombero_nombre && <div className="card-muted" style={{ marginTop: 2 }}>Bombero: {u.bombero_nombre}</div>}
         </div>
         <div className="row">
@@ -89,7 +90,7 @@ export default function Usuarios() {
     const username = form.username.trim();
     return conGuardando(async () => {
       const data = await crearUsuario({
-        username, nombre: form.nombre.trim() || null, rol: form.rol,
+        username, nombre: form.nombre.trim() || null, correo: form.correo.trim() || null, rol: form.rol,
         bombero_id: form.bombero_id || null,
       });
       setForm(FORM_VACIO);
@@ -100,7 +101,7 @@ export default function Usuarios() {
 
   function abrirEdicion(u) {
     setEdit({
-      id: u.id, username: u.username, nombre: u.nombre ?? "", rol: u.rol, activo: u.activo, password: "",
+      id: u.id, username: u.username, nombre: u.nombre ?? "", correo: u.correo ?? "", rol: u.rol, activo: u.activo, password: "",
       bombero_id: u.bombero_id ?? "",
     });
     setOpenEdit(true);
@@ -108,7 +109,10 @@ export default function Usuarios() {
 
   function guardarEdicion() {
     return conGuardando(async () => {
-      const payload = { nombre: edit.nombre.trim() || null, rol: edit.rol, activo: edit.activo, bombero_id: edit.bombero_id || null };
+      const payload = {
+        nombre: edit.nombre.trim() || null, correo: edit.correo.trim() || null,
+        rol: edit.rol, activo: edit.activo, bombero_id: edit.bombero_id || null,
+      };
       if (edit.password) payload.password = edit.password;
       await actualizarUsuario(edit.id, payload);
       await cargar();
@@ -156,6 +160,11 @@ export default function Usuarios() {
               placeholder="Ej: Juan Pérez" />
           </label>
           <label className="label">
+            Correo (opcional)
+            <input className="input" type="email" value={form.correo} onChange={campoForm("correo")}
+              placeholder="Ej: jperez@gmail.com" autoComplete="off" />
+          </label>
+          <label className="label">
             Rol
             <select className="input" value={form.rol} onChange={campoForm("rol")}>
               {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
@@ -200,6 +209,11 @@ export default function Usuarios() {
             <label className="label">
               Nombre
               <input className="input" value={edit.nombre} onChange={campoEdit("nombre")} />
+            </label>
+            <label className="label">
+              Correo (opcional)
+              <input className="input" type="email" value={edit.correo} onChange={campoEdit("correo")}
+                placeholder="Ej: jperez@gmail.com" autoComplete="off" />
             </label>
             <div className="grid-2">
               <label className="label">

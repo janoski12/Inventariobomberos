@@ -104,6 +104,12 @@ function esFechaValida(s) {
     return date.getFullYear() === y && date.getMonth() === mo - 1 && date.getDate() === d;
 }
 
+// Formato razonable de correo (algo@dominio.ext, sin espacios, hasta 254
+// caracteres). Solo revisa la forma: no verifica que la casilla exista.
+function esCorreoValido(s) {
+    return typeof s === "string" && s.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+}
+
 function parseXlsxBuffer(req, res) {
     if (!req.file) { badRequest(res, "No se recibió ningún archivo"); return null; }
     const ext = req.file.originalname.split(".").pop().toLowerCase();
@@ -156,6 +162,6 @@ module.exports = {
     ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, ESTADOS_BOMBERO, TIPOS_UBICACION,
     TIPOS_CONTROL, RESULTADOS_CONTROL, ESTADOS_ASIGNACION, RESULTADOS_REVISION,
     isNil, cleanText, badRequest, notFound, conflict, serverError, generarPasswordTemporal,
-    normXlsx, normFechaXlsx, parseXlsxBuffer, esFechaValida, fechaLocalISO, parseDocumentoBuffer,
+    normXlsx, normFechaXlsx, parseXlsxBuffer, esFechaValida, esCorreoValido, fechaLocalISO, parseDocumentoBuffer,
     descripcionOrigenItem, siguienteCodigoItem,
 };
