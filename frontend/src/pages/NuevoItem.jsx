@@ -6,6 +6,7 @@ import { useDialog } from "../context/DialogContext";
 import { listarBomberos } from "../api/bomberos";
 import { listarUbicaciones } from "../api/ubicaciones";
 import CreatableSelect from "../components/CreatableSelect";
+import GavetaInput from "../components/GavetaInput";
 
 export default function NuevoItem() {
   const navigate = useNavigate();
@@ -324,10 +325,10 @@ export default function NuevoItem() {
               {esCarro && (
                 <label className="label">
                   Gaveta / compartimiento (opcional)
-                  <input
-                    className="input"
+                  <GavetaInput
+                    ubicacionId={form.ubicacion_id}
                     value={form.ubicacion_detalle}
-                    onChange={campo("ubicacion_detalle")}
+                    onChange={(v) => setForm((p) => ({ ...p, ubicacion_detalle: v }))}
                     placeholder="Ej: Gaveta 3, compartimiento lateral"
                   />
                 </label>

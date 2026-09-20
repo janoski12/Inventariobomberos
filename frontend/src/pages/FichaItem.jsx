@@ -4,6 +4,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { obtenerItem, obtenerMovimientos, cambiarEstadoItem, moverItem, actualizarItem, eliminarItem, obtenerSubcategorias, obtenerMarcas, obtenerModelos } from "../api/items";
 import { cancelarActaEntrega, abrirDocumento, abrirDocumentoFirmado } from "../api/actas";
 import CreatableSelect from "../components/CreatableSelect";
+import GavetaInput from "../components/GavetaInput";
 import EntregaKitModal from "../components/EntregaKitModal";
 import DevolverItemsModal from "../components/DevolverItemsModal";
 import ConfirmarActaModal from "../components/ConfirmarActaModal";
@@ -575,12 +576,10 @@ export default function FichaItem() {
           {moverEsCarro && (
             <label>
               Gaveta / compartimiento (opcional)
-              <input
+              <GavetaInput
+                ubicacionId={formMover.ubicacion_id}
                 value={formMover.ubicacion_detalle}
-                onChange={(e) =>
-                  setFormMover((p) => ({ ...p, ubicacion_detalle: e.target.value }))
-                }
-                className="input"
+                onChange={(v) => setFormMover((p) => ({ ...p, ubicacion_detalle: v }))}
                 placeholder="Ej: Gaveta 3, compartimiento lateral"
               />
             </label>
