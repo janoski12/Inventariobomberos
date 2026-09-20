@@ -132,7 +132,7 @@ export default function FichaUbicacion() {
 
 function InfoRow({ label, value }) {
   return (
-    <div className="inforow" style={{ padding: "8px 0" }}>
+    <div className="inforow">
       <span className="inforow-label">{label}</span>
       <span className="inforow-value">{value}</span>
     </div>
