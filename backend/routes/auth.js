@@ -2,8 +2,44 @@ const router = require("express").Router();
 const bcrypt = require("bcryptjs");
 const db = require("../db");
 const { firmarToken, requireAuth } = require("../lib/auth");
-const { cleanText, badRequest, serverError } = require("../lib/helpers");
+const { cleanText, badRequest, serverError, esCorreoValido } = require("../lib/helpers");
 const limiteLogin = require("../lib/limitarLogin");
+const { correoConfigurado } = require("../lib/correo");
+const recuperacion = require("../lib/recuperacion");
+
+// "actual": la contraseña de la cuenta. "temporal": la enviada por correo al
+// recuperar la clave (ver lib/recuperacion.js). null: ninguna de las dos.
+function claveEscrita(usuario, password) {
+    if (bcrypt.compareSync(password, usuario.password_hash)) return "actual";
+    if (recuperacion.esTemporalVigente(usuario, password)) return "temporal";
+    return null;
+}
+
+// ¿Está configurado el envío de correo? La pantalla de ingreso solo ofrece
+// "¿Olvidaste tu contraseña?" cuando lo está.
+router.get("/auth/recuperacion", (_req, res) => {
+    res.json({ disponible: correoConfigurado() });
+});
+
+// Recuperar contraseña: envía una contraseña temporal al correo registrado en la
+// cuenta. Responde lo mismo exista o no el correo (ver lib/recuperacion.js).
+router.post("/auth/recuperar", (req, res) => {
+    try {
+        if (!correoConfigurado())
+            return res.status(503).json({ error: "La recuperación por correo no está disponible. Pide a un administrador que restablezca tu contraseña." });
+
+        const correo = cleanText(req.body.correo)?.toLowerCase() ?? null;
+        if (!correo || !esCorreoValido(correo)) return badRequest(res, "Escribe un correo válido");
+
+        if (!recuperacion.permitirSolicitud(correo))
+            return res.status(429).json({ error: "Hiciste demasiadas solicitudes. Intenta de nuevo más tarde." });
+
+        recuperacion.solicitar(correo);
+        res.json({ ok: true, vigencia_minutos: recuperacion.VIGENCIA_MIN });
+    } catch (e) {
+        return serverError(res, e, "Error al solicitar la recuperación de contraseña");
+    }
+});
 
 // Iniciar sesion
 router.post("/auth/login", (req, res) => {
@@ -32,13 +68,19 @@ router.post("/auth/login", (req, res) => {
             });
         }
 
-        if (!usuario || !usuario.activo || !bcrypt.compareSync(password, usuario.password_hash)) {
+        const clave = usuario?.activo ? claveEscrita(usuario, password) : null;
+        if (!clave) {
             if (limiteLogin.registrarFallo(cuenta))
                 console.warn(`Login bloqueado por ${limiteLogin.MAX_FALLOS} intentos fallidos seguidos: ${usuario ? `cuenta "${usuario.username}"` : "nombres de usuario inexistentes"}`);
             return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
         }
 
         limiteLogin.limpiar(cuenta);
+        // Con la temporal: pasa a ser la clave de la cuenta y obliga a cambiarla. Con la clave
+        // de siempre: si había una temporal pendiente ya no hace falta, se descarta.
+        if (clave === "temporal") recuperacion.promoverTemporal(usuario);
+        else if (usuario.recuperacion_hash) recuperacion.descartarTemporal(usuario.id);
+
         const token = firmarToken(usuario);
         res.json({
             token,
@@ -82,7 +124,8 @@ router.put("/auth/password", requireAuth, (req, res) => {
         if (!usuario || !bcrypt.compareSync(actual, usuario.password_hash))
             return res.status(401).json({ error: "La contraseña actual es incorrecta" });
 
-        db.prepare("UPDATE usuario SET password_hash = ?, debe_cambiar_password = 0 WHERE id = ?").run(bcrypt.hashSync(nueva, 10), usuario.id);
+        db.prepare("UPDATE usuario SET password_hash = ?, debe_cambiar_password = 0, recuperacion_hash = NULL, recuperacion_expira = NULL WHERE id = ?")
+            .run(bcrypt.hashSync(nueva, 10), usuario.id);
         res.json({ ok: true });
     } catch (e) {
         return serverError(res, e, "Error al cambiar la contraseña");
