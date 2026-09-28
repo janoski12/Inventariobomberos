@@ -17,6 +17,11 @@ const CLASE_CRITICIDAD = {
   BAJA: "text-baja-crit",
 };
 
+const CLASE_RESULTADO = {
+  FALLA: "item-fecha-danger",
+  FALTANTE: "item-fecha-danger",
+};
+
 export default function Reportes() {
   const { toast } = useDialog();
   const [data, setData] = useState(null);
@@ -156,6 +161,37 @@ export default function Reportes() {
                   <span className="item-fecha-warning">{c.fecha_objetivo}</span>
                 </div>
                 <div className="item-tipo">{c.tipo}</div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {/* ÍTEMS CON FALLA/FALTANTE EN SU ÚLTIMA REVISIÓN DE CARRO */}
+      <div className="spread" style={{ marginBottom: 10 }}>
+        <h3>Fallas o faltantes en revisiones de carros</h3>
+        {data.itemsConProblemaEnRevision.length > 0 && (
+          <span className="badge-danger">{data.itemsConProblemaEnRevision.length} ítem{data.itemsConProblemaEnRevision.length !== 1 ? "s" : ""}</span>
+        )}
+      </div>
+      {data.itemsConProblemaEnRevision.length === 0 ? (
+        <p className="muted" style={{ marginBottom: 20 }}>Ninguna revisión física reciente reportó fallas ni faltantes.</p>
+      ) : (
+        <div className="stack" style={{ marginBottom: 20 }}>
+          {data.itemsConProblemaEnRevision.map((r) => (
+            <Link key={r.item_id} to={`/items/${r.item_id}`} style={{ textDecoration: "none" }}>
+              <div className="card clickable card--vencido">
+                <div className="spread">
+                  <div>
+                    <span className="item-code">{r.codigo}</span>
+                    <span className="item-desc">{r.descripcion}</span>
+                  </div>
+                  <span className={CLASE_RESULTADO[r.resultado] ?? ""}>{r.resultado}</span>
+                </div>
+                <div className="item-tipo">
+                  {r.carro_nombre} · {r.fecha}
+                  {r.observacion && ` · "${r.observacion}"`}
+                </div>
               </div>
             </Link>
           ))}

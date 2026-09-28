@@ -202,6 +202,12 @@ export default function FichaCarro() {
                       {it.ubicacion_detalle ? <b>{it.ubicacion_detalle}</b> : <span className="muted">Sin gaveta/compartimiento indicado</span>}
                       {(it.marca || it.modelo) ? ` · ${[it.marca, it.modelo].filter(Boolean).join(" / ")}` : ""}
                     </div>
+                    {it.ultima_revision_resultado && it.ultima_revision_resultado !== "OK" && (
+                      <div className="card-detail" style={{ color: "var(--c-fuera-servicio)" }}>
+                        Última revisión ({it.ultima_revision_fecha.slice(0, 10)}): {it.ultima_revision_resultado}
+                        {it.ultima_revision_observacion && ` — "${it.ultima_revision_observacion}"`}
+                      </div>
+                    )}
                   </div>
                 </Link>
               ))}

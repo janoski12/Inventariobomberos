@@ -1226,6 +1226,22 @@ describe("Módulo Carros y revisión pública", () => {
         const ficha = await request(app).get(`/api/carros/${carroId}`).set(auth(adminToken));
         assert.equal(ficha.body.revisiones.length, 1);
         assert.equal(ficha.body.revisiones[0].fallas, 1);
+
+        const casco = ficha.body.items.find((i) => i.id === itemId);
+        assert.equal(casco.ultima_revision_resultado, "FALLA");
+        assert.equal(casco.ultima_revision_observacion, "Correa cortada");
+        assert.ok(casco.ultima_revision_fecha);
+
+        // Un item del mismo carro que nunca se revisó no debe traer datos de revisión
+        const sinRevisar = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ categoria: "EPP", descripcion: "Nunca revisado", ubicacion_actual_id: carroId });
+        const ficha2 = await request(app).get(`/api/carros/${carroId}`).set(auth(adminToken));
+        const itemSinRevisar = ficha2.body.items.find((i) => i.id === sinRevisar.body.id);
+        assert.equal(itemSinRevisar.ultima_revision_resultado, null);
+        assert.equal(itemSinRevisar.ultima_revision_fecha, null);
+
+        // Limpieza: un test posterior de este mismo describe espera el carro sin items
+        await request(app).delete(`/api/items/${sinRevisar.body.id}`).set(auth(adminToken));
     });
 
     test("GET /carros/:id/revisiones/:revisionId trae el detalle por item", async () => {
@@ -1503,6 +1519,55 @@ describe("Reportes", () => {
         assert.ok(res.body.controlesVencidos.some((c) => c.id === ctrlVencido.body.id), "el control con fecha_objetivo en el pasado debe aparecer como vencido");
         assert.ok(res.body.proximosControles.some((c) => c.id === ctrlProximo.body.id), "el control con fecha_objetivo dentro de 30 días debe aparecer como próximo");
         assert.ok(!res.body.controlesVencidos.some((c) => c.id === ctrlProximo.body.id), "un control aún no vencido no debe aparecer en vencidos");
+    });
+
+    test("GET /reportes incluye ítems cuya revisión física más reciente fue FALLA o FALTANTE", async () => {
+        const carro = await request(app).post("/api/ubicaciones").set(auth(adminToken)).send({ nombre: "Carro Reportes Test", tipo: "CARRO" });
+        const carroId = carro.body.id;
+
+        const itemFalla = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ categoria: "HERRAMIENTA", descripcion: "Ítem con falla reciente", ubicacion_actual_id: carroId });
+        const itemSeArregla = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ categoria: "HERRAMIENTA", descripcion: "Ítem que se arregló después", ubicacion_actual_id: carroId });
+        const itemYaBaja = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ categoria: "HERRAMIENTA", descripcion: "Ítem ya dado de baja", ubicacion_actual_id: carroId });
+        const itemOk = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ categoria: "HERRAMIENTA", descripcion: "Ítem sin problemas", ubicacion_actual_id: carroId });
+
+        await request(app).post(`/api/items/${itemYaBaja.body.id}/estado`).set(auth(adminToken)).send({ estado: "BAJA" });
+
+        // Primera revisión: los cuatro OK, salvo el que se arregla después (que parte con FALLA)
+        await request(app).post(`/api/carros-publico/${carroId}/revisiones`).send({
+            realizada_por: "Bombero Reportes",
+            items: [
+                { item_id: itemFalla.body.id, resultado: "OK" },
+                { item_id: itemSeArregla.body.id, resultado: "FALLA", observacion: "Correa suelta" },
+                { item_id: itemYaBaja.body.id, resultado: "FALLA" },
+                { item_id: itemOk.body.id, resultado: "OK" },
+            ],
+        });
+        // Segunda revisión, más reciente: itemFalla ahora falla, itemSeArregla ya quedó OK
+        await request(app).post(`/api/carros-publico/${carroId}/revisiones`).send({
+            realizada_por: "Bombero Reportes",
+            items: [
+                { item_id: itemFalla.body.id, resultado: "FALTANTE", observacion: "No está en su gaveta" },
+                { item_id: itemSeArregla.body.id, resultado: "OK" },
+            ],
+        });
+
+        const res = await request(app).get("/api/reportes").set(auth(adminToken));
+        assert.equal(res.status, 200);
+        const lista = res.body.itemsConProblemaEnRevision;
+        const porId = Object.fromEntries(lista.map((r) => [r.item_id, r]));
+
+        assert.ok(porId[itemFalla.body.id], "aparece: su revisión más reciente fue FALTANTE");
+        assert.equal(porId[itemFalla.body.id].resultado, "FALTANTE");
+        assert.equal(porId[itemFalla.body.id].observacion, "No está en su gaveta");
+        assert.equal(porId[itemFalla.body.id].carro_nombre, "Carro Reportes Test");
+
+        assert.ok(!porId[itemSeArregla.body.id], "no aparece: su revisión más reciente fue OK, aunque antes falló");
+        assert.ok(!porId[itemYaBaja.body.id], "no aparece: el ítem ya está BAJA, no hace falta alertar de nuevo");
+        assert.ok(!porId[itemOk.body.id], "no aparece: nunca tuvo un resultado distinto de OK");
     });
 });
 

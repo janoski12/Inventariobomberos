@@ -47,6 +47,29 @@ router.get("/reportes", (_req, res) => {
             LIMIT 100
         `).all(hoy, en30dias);
 
+        // Ítems cuya revisión física MÁS RECIENTE (entre todas las revisiones de
+        // carro en que participaron) resultó FALLA o FALTANTE. La revisión es un
+        // registro aparte del estado oficial del item (ver routes/carrosPublico.js),
+        // así que sin esto nadie se entera de un hallazgo salvo que abra el
+        // historial del carro a mano. Se excluyen los ítems ya dados de baja o
+        // fuera de servicio: si ya están marcados así, no hace falta alertar de nuevo.
+        const itemsConProblemaEnRevision = db.prepare(`
+            WITH ultima AS (
+                SELECT rci.item_id, rci.resultado, rci.observacion, rc.fecha, rc.ubicacion_id,
+                       ROW_NUMBER() OVER (PARTITION BY rci.item_id ORDER BY rc.fecha DESC, rc.id DESC) AS rn
+                FROM revision_carro_item rci
+                JOIN revision_carro rc ON rc.id = rci.revision_id
+            )
+            SELECT i.id AS item_id, i.codigo, i.descripcion, i.estado,
+                   u.nombre AS carro_nombre, ultima.resultado, ultima.observacion, ultima.fecha
+            FROM ultima
+            JOIN item i ON i.id = ultima.item_id
+            JOIN ubicacion u ON u.id = ultima.ubicacion_id
+            WHERE ultima.rn = 1 AND ultima.resultado != 'OK' AND i.estado IN ('OPERATIVO', 'MANTENCION')
+            ORDER BY ultima.fecha DESC
+            LIMIT 50
+        `).all();
+
         res.json({
             porEstado,
             porCriticidad,
@@ -54,6 +77,7 @@ router.get("/reportes", (_req, res) => {
             sinUbicar,
             controlesVencidos,
             proximosControles,
+            itemsConProblemaEnRevision,
         });
     } catch (e) {
         return serverError(res, e, "Error generando reportes");

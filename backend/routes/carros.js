@@ -40,11 +40,23 @@ router.get("/carros/:id", (req, res) => {
     const carro = db.prepare("SELECT * FROM ubicacion WHERE id=? AND tipo='CARRO'").get(id);
     if (!carro) return notFound(res, "Carro no encontrado");
 
+    // resultado/fecha/observacion de la revisión más reciente que incluyó a cada
+    // item (si alguna), para avisar en la ficha sin tener que abrir el historial
     const items = db.prepare(`
-        SELECT id, codigo, descripcion, categoria, subcategoria, estado, criticidad, marca, modelo, ubicacion_detalle
-        FROM item WHERE ubicacion_actual_id = ?
-        ORDER BY ubicacion_detalle IS NULL, ubicacion_detalle, codigo
-    `).all(id);
+        WITH ultima AS (
+            SELECT rci.item_id, rci.resultado, rci.observacion, rc.fecha,
+                   ROW_NUMBER() OVER (PARTITION BY rci.item_id ORDER BY rc.fecha DESC, rc.id DESC) AS rn
+            FROM revision_carro_item rci
+            JOIN revision_carro rc ON rc.id = rci.revision_id
+            WHERE rc.ubicacion_id = ?
+        )
+        SELECT i.id, i.codigo, i.descripcion, i.categoria, i.subcategoria, i.estado, i.criticidad, i.marca, i.modelo, i.ubicacion_detalle,
+               ultima.resultado AS ultima_revision_resultado, ultima.fecha AS ultima_revision_fecha, ultima.observacion AS ultima_revision_observacion
+        FROM item i
+        LEFT JOIN ultima ON ultima.item_id = i.id AND ultima.rn = 1
+        WHERE i.ubicacion_actual_id = ?
+        ORDER BY i.ubicacion_detalle IS NULL, i.ubicacion_detalle, i.codigo
+    `).all(id, id);
 
     const revisiones = db.prepare(`
         SELECT rc.id, rc.realizada_por, rc.fecha, rc.observacion_general, rc.gaveta,
