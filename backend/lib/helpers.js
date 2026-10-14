@@ -46,6 +46,35 @@ function cleanText(v) {
     return s.length ? s : null;
 }
 
+// Mismas mayúsculas/minúsculas, tildes y espacios -> misma clave. No normaliza
+// el VALOR (eso lo decide canonizarValorLibre); solo lo compara.
+function normalizarComparable(s) {
+    return String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").trim().replace(/\s+/g, " ").toUpperCase();
+}
+
+// Campos de texto libre (no son un enum, como categoria/estado) donde ya
+// pasó que el mismo valor terminó escrito de formas distintas (p.ej. "MSA" /
+// "msa", "Casco" / "CASCO") — ver auditorías de inventario de sept-2026.
+const CAMPOS_CANONIZABLES_ITEM = ["subcategoria", "marca", "modelo", "talla"];
+
+// Si ya existe en item.<campo> un valor equivalente a `valor` (mismo texto sin
+// distinguir mayúsculas/tildes/espacios), devuelve ESE valor tal como está
+// guardado, para no crear una variante nueva del mismo dato. Si no hay ningún
+// valor parecido, deja pasar `valor` tal cual: no restringe vocabulario nuevo,
+// solo evita repetir uno que ya existe de otra forma. Se usa al crear/editar
+// items (routes/items.js) y al importar desde Excel (routes/importar.js), que
+// son los tres lugares donde se escribe alguno de estos campos.
+function canonizarValorLibre(campo, valor) {
+    const limpio = cleanText(valor);
+    if (!limpio) return null;
+    if (!CAMPOS_CANONIZABLES_ITEM.includes(campo)) return limpio;
+
+    const clave = normalizarComparable(limpio);
+    const existentes = db.prepare(`SELECT DISTINCT ${campo} AS v FROM item WHERE ${campo} IS NOT NULL`).all();
+    const igual = existentes.find((r) => normalizarComparable(r.v) === clave);
+    return igual ? igual.v : limpio;
+}
+
 function badRequest(res, message) {
     return res.status(400).json({ error: message });
 }
@@ -163,5 +192,5 @@ module.exports = {
     TIPOS_CONTROL, RESULTADOS_CONTROL, ESTADOS_ASIGNACION, RESULTADOS_REVISION,
     isNil, cleanText, badRequest, notFound, conflict, serverError, generarPasswordTemporal,
     normXlsx, normFechaXlsx, parseXlsxBuffer, esFechaValida, esCorreoValido, fechaLocalISO, parseDocumentoBuffer,
-    descripcionOrigenItem, siguienteCodigoItem,
+    descripcionOrigenItem, siguienteCodigoItem, canonizarValorLibre,
 };

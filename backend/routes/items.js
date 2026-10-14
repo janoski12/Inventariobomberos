@@ -1,6 +1,6 @@
 const router = require("express").Router();
 const db = require("../db");
-const { ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, isNil, cleanText, badRequest, notFound, conflict, serverError, esFechaValida, fechaLocalISO, descripcionOrigenItem, siguienteCodigoItem } = require("../lib/helpers");
+const { ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, isNil, cleanText, badRequest, notFound, conflict, serverError, esFechaValida, fechaLocalISO, descripcionOrigenItem, siguienteCodigoItem, canonizarValorLibre } = require("../lib/helpers");
 const { quienRegistra } = require("../lib/auth");
 const { itemsDeActa } = require("./actas");
 const { borrarSiExiste } = require("../lib/documentos");
@@ -12,12 +12,12 @@ router.post("/items", (req, res) => {
         // para la vista previa); cualquier valor que venga en el body se
         // ignora, para que no se puedan crear códigos duplicados o inválidos.
         const categoria         = cleanText(req.body.categoria);
-        const subcategoria      = cleanText(req.body.subcategoria);
+        const subcategoria      = canonizarValorLibre("subcategoria", req.body.subcategoria);
         const descripcion       = cleanText(req.body.descripcion);
-        const marca             = cleanText(req.body.marca);
-        const modelo            = cleanText(req.body.modelo);
+        const marca             = canonizarValorLibre("marca", req.body.marca);
+        const modelo            = canonizarValorLibre("modelo", req.body.modelo);
         const serie             = cleanText(req.body.serie);
-        const talla             = cleanText(req.body.talla);
+        const talla             = canonizarValorLibre("talla", req.body.talla);
         const estado            = cleanText(req.body.estado) || "OPERATIVO";
         const criticidad        = cleanText(req.body.criticidad) || "MEDIA";
         const fecha_fabricacion = cleanText(req.body.fecha_fabricacion);
@@ -148,12 +148,12 @@ router.put("/items/:id", (req, res) => {
 
         const codigo = cleanText(req.body.codigo) ?? actual.codigo;
         const categoria = cleanText(req.body.categoria) ?? actual.categoria;
-        const subcategoria = isNil(req.body.subcategoria) ? actual.subcategoria : cleanText(req.body.subcategoria);
+        const subcategoria = isNil(req.body.subcategoria) ? actual.subcategoria : canonizarValorLibre("subcategoria", req.body.subcategoria);
         const descripcion = cleanText(req.body.descripcion) ?? actual.descripcion;
-        const marca = isNil(req.body.marca) ? actual.marca : cleanText(req.body.marca);
-        const modelo = isNil(req.body.modelo) ? actual.modelo : cleanText(req.body.modelo);
+        const marca = isNil(req.body.marca) ? actual.marca : canonizarValorLibre("marca", req.body.marca);
+        const modelo = isNil(req.body.modelo) ? actual.modelo : canonizarValorLibre("modelo", req.body.modelo);
         const serie = isNil(req.body.serie) ? actual.serie : cleanText(req.body.serie);
-        const talla = isNil(req.body.talla) ? actual.talla : cleanText(req.body.talla);
+        const talla = isNil(req.body.talla) ? actual.talla : canonizarValorLibre("talla", req.body.talla);
         const criticidad = cleanText(req.body.criticidad) ?? actual.criticidad;
 
         if (!codigo) return badRequest(res, "codigo es requerido");

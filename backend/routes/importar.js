@@ -3,7 +3,7 @@ const db = require("../db");
 const { requireAdmin, quienRegistra } = require("../lib/auth");
 const {
     upload, ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, ESTADOS_BOMBERO, TIPOS_UBICACION, TIPOS_CONTROL,
-    badRequest, serverError, normXlsx, normFechaXlsx, parseXlsxBuffer, fechaLocalISO,
+    badRequest, serverError, normXlsx, normFechaXlsx, parseXlsxBuffer, fechaLocalISO, canonizarValorLibre,
 } = require("../lib/helpers");
 const { crearBackup } = require("../lib/backups");
 
@@ -113,7 +113,7 @@ router.post("/importar", requireAdmin, upload.single("archivo"), async (req, res
                 if (ubicNombre && bomNombre) throw new Error(`Ítem "${codigo}": no puede tener ubicación y bombero simultáneamente`);
                 const ubicId = ubicNombre ? ubicMap.get(ubicNombre) ?? (() => { throw new Error(`Ítem "${codigo}": ubicación no encontrada "${ubicNombre}"`); })() : null;
                 const bomId  = bomNombre  ? bomMap.get(bomNombre)   ?? (() => { throw new Error(`Ítem "${codigo}": bombero no encontrado "${bomNombre}"`);   })() : null;
-                insItem.run(codigo, categoria, normXlsx(it.subcategoria) || null, normXlsx(it.descripcion) || codigo, normXlsx(it.marca) || null, normXlsx(it.modelo) || null, normXlsx(it.serie) || null, normXlsx(it.talla) || null, estado, criticidad, ubicId, normXlsx(it.ubicacion_detalle) || null, bomId, normFechaXlsx(it.fecha_fabricacion), normFechaXlsx(it.fecha_recepcion), normFechaXlsx(it.fecha_vencimiento));
+                insItem.run(codigo, categoria, canonizarValorLibre("subcategoria", normXlsx(it.subcategoria)), normXlsx(it.descripcion) || codigo, canonizarValorLibre("marca", normXlsx(it.marca)), canonizarValorLibre("modelo", normXlsx(it.modelo)), normXlsx(it.serie) || null, canonizarValorLibre("talla", normXlsx(it.talla)), estado, criticidad, ubicId, normXlsx(it.ubicacion_detalle) || null, bomId, normFechaXlsx(it.fecha_fabricacion), normFechaXlsx(it.fecha_recepcion), normFechaXlsx(it.fecha_vencimiento));
             }
 
             const itemMap = new Map();
@@ -398,12 +398,12 @@ router.post("/importar/items", upload.single("archivo"), (req, res) => {
                 const categoria   = CATEGORIAS.includes(normXlsx(it.categoria).toUpperCase())   ? normXlsx(it.categoria).toUpperCase()   : "OTRO";
                 const estado      = ESTADOS_ITEM.includes(normXlsx(it.estado).toUpperCase())     ? normXlsx(it.estado).toUpperCase()     : "OPERATIVO";
                 const criticidad  = CRITICIDADES.includes(normXlsx(it.criticidad).toUpperCase()) ? normXlsx(it.criticidad).toUpperCase() : "MEDIA";
-                const subcategoria = normXlsx(it.subcategoria) || null;
+                const subcategoria = canonizarValorLibre("subcategoria", normXlsx(it.subcategoria));
                 const descripcion  = normXlsx(it.descripcion)  || codigo;
-                const marca        = normXlsx(it.marca)         || null;
-                const modelo       = normXlsx(it.modelo)        || null;
+                const marca        = canonizarValorLibre("marca", normXlsx(it.marca));
+                const modelo       = canonizarValorLibre("modelo", normXlsx(it.modelo));
                 const serie        = normXlsx(it.serie)         || null;
-                const talla        = normXlsx(it.talla)         || null;
+                const talla        = canonizarValorLibre("talla", normXlsx(it.talla));
                 const ubicNombre   = normXlsx(it.ubicacion_nombre);
                 const bomNombre    = normXlsx(it.bombero_nombre);
                 const ubicId       = ubicNombre ? ubicMap.get(ubicNombre) : null;

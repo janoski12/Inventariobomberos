@@ -1100,6 +1100,73 @@ describe("Campo talla", () => {
     });
 });
 
+describe("Normalización de marca/modelo/subcategoría/talla (evita variantes del mismo valor)", () => {
+    const crear = (body) => request(app).post("/api/items").set(auth(adminToken))
+        .send({ categoria: "EPP", descripcion: "Ítem de prueba", ...body });
+    const editar = (id, body) => request(app).put(`/api/items/${id}`).set(auth(adminToken)).send(body);
+    const ficha = async (id) => (await request(app).get(`/api/items/${id}`).set(auth(adminToken))).body;
+
+    test("al crear, una variante de mayúsculas/tildes de un valor ya existente se guarda con la forma ya establecida", async () => {
+        const base = await crear({ marca: "MSA-Canon" });
+        assert.equal(base.status, 201);
+
+        const variante = await crear({ marca: "msa-canon" });
+        assert.equal(variante.status, 201);
+        assert.equal((await ficha(variante.body.id)).marca, "MSA-Canon", "debe snapear a la forma ya guardada, no a la recién escrita");
+
+        const conTilde = await crear({ marca: "MSA-CANÓN" }); // variante también por tilde
+        assert.equal((await ficha(conTilde.body.id)).marca, "MSA-Canon");
+    });
+
+    test("un valor genuinamente nuevo se guarda tal cual, sin alterarlo", async () => {
+        const res = await crear({ subcategoria: "Categoría Nunca Antes Vista" });
+        assert.equal((await ficha(res.body.id)).subcategoria, "Categoría Nunca Antes Vista");
+    });
+
+    test("al editar, una variante de un valor existente también se normaliza", async () => {
+        await crear({ modelo: "Ux-900" });
+        const item = await crear({ modelo: "Otro" });
+        const edit = await editar(item.body.id, { modelo: "ux-900" });
+        assert.equal(edit.status, 200);
+        assert.equal((await ficha(item.body.id)).modelo, "Ux-900");
+    });
+
+    test("editar sin enviar el campo no lo toca (sigue el convenio undefined = no cambiar)", async () => {
+        const item = await crear({ talla: "XXL-Propia" });
+        await editar(item.body.id, { descripcion: "Solo cambio la descripción" });
+        assert.equal((await ficha(item.body.id)).talla, "XXL-Propia");
+    });
+
+    test("categoria/estado/criticidad no pasan por esta normalización (siguen siendo un enum exacto)", async () => {
+        const item = await crear({ categoria: "EPP", estado: "OPERATIVO", criticidad: "ALTA" });
+        const f = await ficha(item.body.id);
+        assert.equal(f.categoria, "EPP");
+        assert.equal(f.estado, "OPERATIVO");
+        assert.equal(f.criticidad, "ALTA");
+    });
+
+    test("la importación parcial también normaliza contra lo que ya existe en el sistema", async () => {
+        const xlsx = require("xlsx");
+        await crear({ marca: "Cobra-Parcial" });
+
+        const filas = [{
+            codigo: "NORM-PARCIAL-1", categoria: "HERRAMIENTA", subcategoria: "", descripcion: "Ítem importado",
+            marca: "cobra-parcial", modelo: "", serie: "", talla: "", estado: "OPERATIVO", criticidad: "MEDIA",
+            ubicacion_nombre: "", bombero_nombre: "", fecha_fabricacion: "", fecha_recepcion: "", fecha_vencimiento: "",
+        }];
+        const wb = xlsx.utils.book_new();
+        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet(filas), "Items");
+        const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+
+        const imp = await request(app).post("/api/importar/items").set(auth(adminToken)).attach("archivo", buf, "items.xlsx");
+        assert.equal(imp.status, 200);
+        assert.equal(imp.body.resumen.insertados, 1);
+
+        const nuevo = await request(app).get("/api/items").set(auth(adminToken)).query({ q: "NORM-PARCIAL-1" });
+        assert.equal(nuevo.body[0].marca, "Cobra-Parcial");
+    });
+});
+
 describe("Importación parcial de ítems", () => {
     test("celdas de asignación vacías conservan la asignación actual", async () => {
         const xlsx = require("xlsx");
@@ -1720,16 +1787,36 @@ describe("Carga completa desde Excel con cuentas vinculadas a bomberos", () => {
         const wb = xlsx.utils.book_new();
         xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet([bomberoFila("Bombero Permanece"), bomberoFila("Bombero Nuevo")]), "Bomberos");
         xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet([{ nombre: "Bodega Carga", tipo: "BODEGA", responsable: "", activo: 1 }]), "Ubicaciones");
-        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet([{
-            codigo: "EPP-9001", categoria: "EPP", subcategoria: "", descripcion: "Casco de la carga", marca: "", modelo: "",
-            serie: "", talla: "", estado: "OPERATIVO", criticidad: "MEDIA", ubicacion_nombre: "Bodega Carga",
-            ubicacion_detalle: "", bombero_nombre: "", fecha_fabricacion: "", fecha_recepcion: "", fecha_vencimiento: "",
-        }]), "Items");
+        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet([
+            {
+                codigo: "EPP-9001", categoria: "EPP", subcategoria: "", descripcion: "Casco de la carga", marca: "", modelo: "",
+                serie: "", talla: "", estado: "OPERATIVO", criticidad: "MEDIA", ubicacion_nombre: "Bodega Carga",
+                ubicacion_detalle: "", bombero_nombre: "", fecha_fabricacion: "", fecha_recepcion: "", fecha_vencimiento: "",
+            },
+            // Dos filas con el mismo valor escrito distinto, para comprobar que la
+            // carga completa también normaliza entre filas del mismo archivo
+            {
+                codigo: "EPP-9002", categoria: "EPP", subcategoria: "", descripcion: "Guante de la carga", marca: "Cobra-Carga", modelo: "",
+                serie: "", talla: "", estado: "OPERATIVO", criticidad: "MEDIA", ubicacion_nombre: "", ubicacion_detalle: "",
+                bombero_nombre: "", fecha_fabricacion: "", fecha_recepcion: "", fecha_vencimiento: "",
+            },
+            {
+                codigo: "EPP-9003", categoria: "EPP", subcategoria: "", descripcion: "Bota de la carga", marca: "cobra-carga", modelo: "",
+                serie: "", talla: "", estado: "OPERATIVO", criticidad: "MEDIA", ubicacion_nombre: "", ubicacion_detalle: "",
+                bombero_nombre: "", fecha_fabricacion: "", fecha_recepcion: "", fecha_vencimiento: "",
+            },
+        ]), "Items");
         xlsx.utils.book_append_sheet(wb, xlsx.utils.aoa_to_sheet([["codigo_item", "tipo", "fecha_objetivo"]]), "Controles");
         const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
 
         const imp = await request(app).post("/api/importar").set(auth(adminToken)).attach("archivo", buf, "carga.xlsx");
         assert.equal(imp.status, 200, JSON.stringify(imp.body));
+
+        const itemsCarga = await request(app).get("/api/items").set(auth(adminToken)).query({ q: "de la carga" });
+        const guante = itemsCarga.body.find((i) => i.codigo === "EPP-9002");
+        const bota = itemsCarga.body.find((i) => i.codigo === "EPP-9003");
+        assert.equal(guante.marca, "Cobra-Carga");
+        assert.equal(bota.marca, "Cobra-Carga", "debe normalizarse a la forma de la fila anterior del mismo archivo");
 
         const bomberos = await request(app).get("/api/bomberos").set(auth(adminToken));
         const nuevoId = bomberos.body.find((b) => b.nombre === "Bombero Permanece").id;
