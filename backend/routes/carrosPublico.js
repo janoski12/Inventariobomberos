@@ -22,10 +22,14 @@ router.get("/carros-publico/:id", (req, res) => {
         const carro = obtenerCarro(id);
         if (!carro) return notFound(res, "Carro no encontrado");
 
+        // Dentro de cada gaveta, se agrupa por subcategoria (en mochilas/bolsos
+        // de trauma se usa para indicar a que bolso pertenece cada elemento,
+        // p.ej. "Mochila de trauma B-10") para que el listado de revision no
+        // quede desordenado a medida que se van agregando items con el tiempo.
         const items = db.prepare(`
-            SELECT id, codigo, descripcion, categoria, marca, modelo, estado, ubicacion_detalle
+            SELECT id, codigo, descripcion, categoria, subcategoria, marca, modelo, estado, ubicacion_detalle
             FROM item WHERE ubicacion_actual_id = ?
-            ORDER BY ubicacion_detalle IS NULL, ubicacion_detalle, codigo
+            ORDER BY ubicacion_detalle IS NULL, ubicacion_detalle, subcategoria IS NULL, subcategoria, codigo
         `).all(id);
 
         res.json({ id: carro.id, nombre: carro.nombre, items });

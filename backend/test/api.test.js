@@ -1467,6 +1467,48 @@ describe("Sub-filtro de gaveta al buscar dentro de un carro", () => {
     });
 });
 
+describe("Orden de ítems dentro de una gaveta: agrupados por subcategoría", () => {
+    // En mochilas/bolsos de trauma, subcategoria se usa para indicar a que
+    // bolso pertenece cada elemento (p.ej. "Mochila de trauma B-10"). Si solo
+    // se ordenara por código, un item agregado despues rompe el agrupamiento
+    // aunque sea del mismo bolso que otros ya existentes.
+    let carroId;
+
+    test("preparar carro con items de la misma gaveta, subcategorías intercaladas a propósito", async () => {
+        const carro = await request(app).post("/api/ubicaciones").set(auth(adminToken))
+            .send({ nombre: "Carro Orden Subcategoria Test", tipo: "CARRO" });
+        carroId = carro.body.id;
+
+        const base = { categoria: "TRAUMA", ubicacion_actual_id: carroId, ubicacion_detalle: "Cabina" };
+        await request(app).post("/api/items").set(auth(adminToken))
+            .send({ ...base, descripcion: "Gasa quemaduras", subcategoria: "Bolso Quemaduras" });
+        await request(app).post("/api/items").set(auth(adminToken))
+            .send({ ...base, descripcion: "Torniquete", subcategoria: "Mochila Trauma" });
+        await request(app).post("/api/items").set(auth(adminToken))
+            .send({ ...base, descripcion: "Venda quemaduras", subcategoria: "Bolso Quemaduras" });
+        await request(app).post("/api/items").set(auth(adminToken))
+            .send({ ...base, descripcion: "Sin categorizar" });
+    });
+
+    test("GET /carros-publico/:id deja juntos los items de la misma subcategoría aunque sus códigos estén intercalados", async () => {
+        const res = await request(app).get(`/api/carros-publico/${carroId}`);
+        assert.equal(res.status, 200);
+        assert.deepEqual(
+            res.body.items.map((i) => i.subcategoria),
+            ["Bolso Quemaduras", "Bolso Quemaduras", "Mochila Trauma", null]
+        );
+    });
+
+    test("GET /carros/:id (autenticado) agrupa igual", async () => {
+        const res = await request(app).get(`/api/carros/${carroId}`).set(auth(adminToken));
+        assert.equal(res.status, 200);
+        assert.deepEqual(
+            res.body.items.map((i) => i.subcategoria),
+            ["Bolso Quemaduras", "Bolso Quemaduras", "Mochila Trauma", null]
+        );
+    });
+});
+
 describe("Limpieza de PDFs huérfanos al eliminar item/bombero", () => {
     test("borrar el único item de un acta borra tambien el acta y su PDF del disco", async () => {
         const bom = await request(app).post("/api/bomberos").set(auth(adminToken)).send({ nombre: "Bombero PDF 1" });

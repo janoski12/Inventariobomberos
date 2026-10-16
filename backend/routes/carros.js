@@ -55,7 +55,7 @@ router.get("/carros/:id", (req, res) => {
         FROM item i
         LEFT JOIN ultima ON ultima.item_id = i.id AND ultima.rn = 1
         WHERE i.ubicacion_actual_id = ?
-        ORDER BY i.ubicacion_detalle IS NULL, i.ubicacion_detalle, i.codigo
+        ORDER BY i.ubicacion_detalle IS NULL, i.ubicacion_detalle, i.subcategoria IS NULL, i.subcategoria, i.codigo
     `).all(id, id);
 
     const revisiones = db.prepare(`

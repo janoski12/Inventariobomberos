@@ -51,6 +51,20 @@ export default function RevisionCarroPublica() {
     return items.filter((it) => it.ubicacion_detalle === gavetaElegida);
   }, [carro, gavetaElegida, gavetasPresentes]);
 
+  // Agrupa por subcategoria (ya vienen ordenados así desde el backend) para
+  // que, p.ej., todo lo de la "Mochila de trauma B-10" quede junto en vez de
+  // aparecer mezclado con otros bolsos/mochilas de la misma gaveta. Los items
+  // sin subcategoria quedan sueltos, sin encabezado.
+  const gruposAMostrar = useMemo(() => {
+    const grupos = [];
+    for (const it of itemsAMostrar) {
+      const ultimo = grupos[grupos.length - 1];
+      if (ultimo && ultimo.subcategoria === it.subcategoria) ultimo.items.push(it);
+      else grupos.push({ subcategoria: it.subcategoria, items: [it] });
+    }
+    return grupos;
+  }, [itemsAMostrar]);
+
   function actualizar(itemId, campo, valor) {
     setResultados((p) => ({ ...p, [itemId]: { ...p[itemId], [campo]: valor } }));
   }
@@ -153,36 +167,51 @@ export default function RevisionCarroPublica() {
               {itemsAMostrar.length === 0 ? (
                 <p className="muted">No hay ítems en esta gaveta.</p>
               ) : (
-                itemsAMostrar.map((it) => (
-                  <div key={it.id} className="card">
-                    <div className="card-title">{it.descripcion}</div>
-                    <div className="card-muted">
-                      {it.codigo}
-                      {it.ubicacion_detalle ? ` · ${it.ubicacion_detalle}` : ""}
-                    </div>
-
-                    <div className="row" style={{ marginTop: 10 }}>
-                      {OPCIONES.map((op) => (
-                        <button
-                          key={op.valor}
-                          type="button"
-                          className={`${op.cls}${resultados[it.id]?.resultado === op.valor ? " revision-btn--activo" : ""}`}
-                          onClick={() => actualizar(it.id, "resultado", op.valor)}
-                        >
-                          {op.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    {resultados[it.id]?.resultado !== "OK" && (
-                      <input
-                        className="input"
-                        style={{ marginTop: 8 }}
-                        placeholder="Observación (ej: falta cinta adhesiva)"
-                        value={resultados[it.id]?.observacion ?? ""}
-                        onChange={(e) => actualizar(it.id, "observacion", e.target.value)}
-                      />
+                gruposAMostrar.map((grupo, i) => (
+                  <div key={i} className="stack" style={{ gap: 8 }}>
+                    {grupo.subcategoria ? (
+                      <h4 className="section-title" style={{ margin: "8px 0 0" }}>
+                        {grupo.subcategoria}
+                      </h4>
+                    ) : (
+                      gruposAMostrar.length > 1 && (
+                        <p className="muted" style={{ margin: "8px 0 0" }}>
+                          Sin bolso/subcategoría asignada
+                        </p>
+                      )
                     )}
+                    {grupo.items.map((it) => (
+                      <div key={it.id} className="card">
+                        <div className="card-title">{it.descripcion}</div>
+                        <div className="card-muted">
+                          {it.codigo}
+                          {it.ubicacion_detalle ? ` · ${it.ubicacion_detalle}` : ""}
+                        </div>
+
+                        <div className="row" style={{ marginTop: 10 }}>
+                          {OPCIONES.map((op) => (
+                            <button
+                              key={op.valor}
+                              type="button"
+                              className={`${op.cls}${resultados[it.id]?.resultado === op.valor ? " revision-btn--activo" : ""}`}
+                              onClick={() => actualizar(it.id, "resultado", op.valor)}
+                            >
+                              {op.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {resultados[it.id]?.resultado !== "OK" && (
+                          <input
+                            className="input"
+                            style={{ marginTop: 8 }}
+                            placeholder="Observación (ej: falta cinta adhesiva)"
+                            value={resultados[it.id]?.observacion ?? ""}
+                            onChange={(e) => actualizar(it.id, "observacion", e.target.value)}
+                          />
+                        )}
+                      </div>
+                    ))}
                   </div>
                 ))
               )}
