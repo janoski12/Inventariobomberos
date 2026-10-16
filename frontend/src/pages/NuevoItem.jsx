@@ -301,6 +301,12 @@ export default function NuevoItem() {
                 El ítem se creará y, de inmediato, se generará su acta de entrega en
                 PDF. Quedará asignado al bombero recién al subir el documento firmado.
               </p>
+              <p className="muted" style={{ marginTop: 6 }}>
+                💡 ¿Vas a entregarle varias prendas nuevas a esta misma persona? Cada
+                ítem creado así genera su propia acta por separado. Para firmar una
+                sola vez, crea cada ítem con "Ubicar en lugar" y después usa "Entregar
+                equipo" desde la ficha del bombero para juntarlos en una sola acta.
+              </p>
             </label>
           ) : (
             <>
