@@ -22,6 +22,11 @@ ENV NODE_ENV=production
 # Sin esto el contenedor corre en UTC: datetime('now','localtime') de SQLite y
 # fechaLocalISO() quedarian ~3-4h adelantados respecto a la hora real de Chile.
 ENV TZ=America/Santiago
+# La imagen -slim no trae certificados CA: sin esto, cualquier HTTPS saliente
+# (p.ej. rclone corriendo aqui dentro para el respaldo a la nube) falla con
+# "certificate signed by unknown authority".
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/backend
 
 COPY backend/ ./
