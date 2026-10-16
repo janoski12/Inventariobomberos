@@ -17,6 +17,12 @@ backend/data/documentos/
 .env
 .env.local
 
+# Firma del Capitán: se timbra en las actas (ver FIRMA_CAPITAN_PATH en
+# backend/lib/documentos.js), pero no debe vivir en un repo público. Se
+# coloca a mano en cada checkout/servidor, igual que el .env; sin el
+# archivo, el sistema sigue funcionando y solo omite el timbre.
+backend/assets/firma_capitan.png
+
 # Build
 dist/
 
