@@ -1206,6 +1206,157 @@ describe("Importación parcial de ítems", () => {
     });
 });
 
+// Libro Excel en memoria a partir de { hoja: [filas] } (o { hoja: [[encabezados], ...] } con aoa: true)
+function libroExcel(hojas, { aoa = false } = {}) {
+    const xlsx = require("xlsx");
+    const wb = xlsx.utils.book_new();
+    for (const [nombre, filas] of Object.entries(hojas)) {
+        xlsx.utils.book_append_sheet(wb, aoa ? xlsx.utils.aoa_to_sheet(filas) : xlsx.utils.json_to_sheet(filas), nombre);
+    }
+    return xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+}
+
+describe("Importación parcial: una celda vacía no borra datos", () => {
+    test("un Excel solo con código y descripción conserva categoría, estado, criticidad, marca, serie y fechas", async () => {
+        const item = await request(app).post("/api/items").set(auth(adminToken)).send({
+            categoria: "EPP", subcategoria: "Casco-Vacio", descripcion: "Casco original", marca: "Marca-Vacio",
+            modelo: "Modelo-Vacio", serie: "SER-VACIO-1", talla: "L", estado: "FUERA_SERVICIO", criticidad: "ALTA",
+            fecha_fabricacion: "2021-03-04",
+        });
+        assert.equal(item.status, 201, JSON.stringify(item.body));
+
+        const imp = await request(app).post("/api/importar/items").set(auth(adminToken))
+            .attach("archivo", libroExcel({ Items: [{ codigo: item.body.codigo, descripcion: "Casco renombrado" }] }), "items.xlsx");
+        assert.equal(imp.status, 200, JSON.stringify(imp.body));
+        assert.equal(imp.body.resumen.actualizados, 1);
+
+        const f = (await request(app).get(`/api/items/${item.body.id}`).set(auth(adminToken))).body;
+        assert.equal(f.descripcion, "Casco renombrado", "lo que sí viene en el Excel se actualiza");
+        assert.equal(f.categoria, "EPP");
+        assert.equal(f.subcategoria, "Casco-Vacio");
+        assert.equal(f.marca, "Marca-Vacio");
+        assert.equal(f.modelo, "Modelo-Vacio");
+        assert.equal(f.serie, "SER-VACIO-1");
+        assert.equal(f.talla, "L");
+        assert.equal(f.estado, "FUERA_SERVICIO", "un ítem fuera de servicio no puede volver a OPERATIVO por una celda vacía");
+        assert.equal(f.criticidad, "ALTA");
+        assert.equal(f.fecha_fabricacion, "2021-03-04");
+    });
+
+    test("un ítem nuevo con celdas vacías recibe los valores por defecto", async () => {
+        const imp = await request(app).post("/api/importar/items").set(auth(adminToken))
+            .attach("archivo", libroExcel({ Items: [{ codigo: "IMP-DEFECTO-1", categoria: "", estado: "", criticidad: "" }] }), "items.xlsx");
+        assert.equal(imp.status, 200, JSON.stringify(imp.body));
+        assert.equal(imp.body.resumen.insertados, 1);
+        const [f] = (await request(app).get("/api/items").set(auth(adminToken)).query({ q: "IMP-DEFECTO-1" })).body;
+        assert.equal(f.categoria, "OTRO");
+        assert.equal(f.estado, "OPERATIVO");
+        assert.equal(f.criticidad, "MEDIA");
+        assert.equal(f.descripcion, "IMP-DEFECTO-1");
+    });
+
+    test("bomberos: celdas vacías conservan cargo, estado, RUT y N° de registro", async () => {
+        const bom = await request(app).post("/api/bomberos").set(auth(adminToken)).send({
+            nombre: "Bombero Celdas Vacias", cargo: "Teniente", estado: "INACTIVO", rut: "11111111-1", numero_registro: "777",
+        });
+        assert.equal(bom.status, 201, JSON.stringify(bom.body));
+
+        const imp = await request(app).post("/api/importar/bomberos").set(auth(adminToken))
+            .attach("archivo", libroExcel({ Bomberos: [{ nombre: "Bombero Celdas Vacias", observaciones: "Nueva observación" }] }), "b.xlsx");
+        assert.equal(imp.status, 200, JSON.stringify(imp.body));
+
+        const f = (await request(app).get(`/api/bomberos/${bom.body.id}`).set(auth(adminToken))).body;
+        assert.equal(f.observaciones, "Nueva observación");
+        assert.equal(f.cargo, "Teniente");
+        assert.equal(f.estado, "INACTIVO");
+        assert.equal(f.rut, "11111111-1");
+        assert.equal(f.numero_registro, "777");
+    });
+
+    test("ubicaciones: celdas vacías conservan tipo, responsable y activo; activo acepta SI/NO", async () => {
+        const u = await request(app).post("/api/ubicaciones").set(auth(adminToken))
+            .send({ nombre: "Carro Celdas Vacias", tipo: "CARRO", responsable: "Encargado" });
+        assert.equal(u.status, 201, JSON.stringify(u.body));
+
+        let imp = await request(app).post("/api/importar/ubicaciones").set(auth(adminToken))
+            .attach("archivo", libroExcel({ Ubicaciones: [{ nombre: "Carro Celdas Vacias", tipo: "", responsable: "", activo: "" }] }), "u.xlsx");
+        assert.equal(imp.status, 200, JSON.stringify(imp.body));
+        let f = db.prepare("SELECT * FROM ubicacion WHERE id = ?").get(u.body.id);
+        assert.equal(f.tipo, "CARRO");
+        assert.equal(f.responsable, "Encargado");
+        assert.equal(f.activo, 1);
+
+        imp = await request(app).post("/api/importar/ubicaciones").set(auth(adminToken))
+            .attach("archivo", libroExcel({ Ubicaciones: [{ nombre: "Carro Celdas Vacias", activo: "No" }] }), "u.xlsx");
+        assert.equal(imp.status, 200, JSON.stringify(imp.body));
+        f = db.prepare("SELECT * FROM ubicacion WHERE id = ?").get(u.body.id);
+        assert.equal(f.activo, 0);
+        assert.equal(f.tipo, "CARRO");
+    });
+});
+
+describe("Importación: valores de catálogo", () => {
+    test("acepta mayúsculas, tildes y 'de' (Fuera de servicio, mantención, Comunicación)", async () => {
+        const imp = await request(app).post("/api/importar/items").set(auth(adminToken)).attach("archivo", libroExcel({ Items: [
+            { codigo: "CAT-OK-1", categoria: "Comunicación", estado: "Fuera de servicio", criticidad: "alta" },
+            { codigo: "CAT-OK-2", categoria: "herramienta", estado: "mantención", criticidad: " Baja " },
+            { codigo: "CAT-OK-3", categoria: "EPP", estado: "fuera_servicio", criticidad: "MEDIA" },
+        ] }), "items.xlsx");
+        assert.equal(imp.status, 200, JSON.stringify(imp.body));
+
+        const fila = (c) => db.prepare("SELECT categoria, estado, criticidad FROM item WHERE codigo = ?").get(c);
+        assert.deepEqual({ ...fila("CAT-OK-1") }, { categoria: "COMUNICACION", estado: "FUERA_SERVICIO", criticidad: "ALTA" });
+        assert.deepEqual({ ...fila("CAT-OK-2") }, { categoria: "HERRAMIENTA", estado: "MANTENCION", criticidad: "BAJA" });
+        assert.deepEqual({ ...fila("CAT-OK-3") }, { categoria: "EPP", estado: "FUERA_SERVICIO", criticidad: "MEDIA" });
+    });
+
+    test("un valor no reconocido detiene la importación, indica hoja y fila, y no escribe nada", async () => {
+        const item = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ categoria: "HERRAMIENTA", descripcion: "Hacha intacta", estado: "OPERATIVO" });
+
+        const imp = await request(app).post("/api/importar/items").set(auth(adminToken)).attach("archivo", libroExcel({ Items: [
+            { codigo: item.body.codigo, descripcion: "No debe aplicarse" },     // fila 2: válida
+            { codigo: "CAT-MAL-1", categoria: "Herramientas", estado: "roto" }, // fila 3: dos errores
+        ] }), "items.xlsx");
+        assert.equal(imp.status, 400);
+        assert.equal(imp.body.errores.length, 2, JSON.stringify(imp.body));
+        assert.match(imp.body.errores[0], /Hoja "Items", fila 3: categoria "Herramientas" no es válido/);
+        assert.match(imp.body.errores[1], /fila 3: estado "roto" no es válido \(use: OPERATIVO, MANTENCION, FUERA_SERVICIO, BAJA\)/);
+
+        const f = (await request(app).get(`/api/items/${item.body.id}`).set(auth(adminToken))).body;
+        assert.equal(f.descripcion, "Hacha intacta", "con un error en el archivo no se importa ninguna fila");
+        assert.equal(db.prepare("SELECT COUNT(*) n FROM item WHERE codigo = 'CAT-MAL-1'").get().n, 0);
+    });
+
+    test("valida también estado de bomberos, tipo/activo de ubicaciones y tipo/resultado de controles", async () => {
+        let imp = await request(app).post("/api/importar/bomberos").set(auth(adminToken))
+            .attach("archivo", libroExcel({ Bomberos: [{ nombre: "Bombero Estado Malo", estado: "Licencia" }] }), "b.xlsx");
+        assert.equal(imp.status, 400);
+        assert.match(imp.body.error, /estado "Licencia" no es válido/);
+
+        imp = await request(app).post("/api/importar/ubicaciones").set(auth(adminToken))
+            .attach("archivo", libroExcel({ Ubicaciones: [{ nombre: "Ubic Mala", tipo: "Garage", activo: "quizás" }] }), "u.xlsx");
+        assert.equal(imp.status, 400);
+        assert.equal(imp.body.errores.length, 2, JSON.stringify(imp.body));
+
+        imp = await request(app).post("/api/importar/items").set(auth(adminToken)).attach("archivo", libroExcel({
+            Items: [{ codigo: "CTRL-MAL-1", categoria: "EPP" }],
+            Controles: [{ codigo_item: "CTRL-MAL-1", tipo: "Revision", fecha_objetivo: "2027-01-01", resultado: "Bien" }],
+        }), "i.xlsx");
+        assert.equal(imp.status, 400);
+        assert.match(imp.body.errores[0], /Hoja "Controles", fila 2: tipo "Revision" no es válido/);
+        assert.match(imp.body.errores[1], /resultado "Bien" no es válido/);
+        assert.equal(db.prepare("SELECT COUNT(*) n FROM item WHERE codigo = 'CTRL-MAL-1'").get().n, 0);
+    });
+
+    test("un Excel sin la columna clave (p.ej. el exportado) se rechaza en vez de responder 'sin cambios'", async () => {
+        const buf = libroExcel({ Items: [["Código", "Descripción", "Estado"], ["EPP-0001", "Casco", "OPERATIVO"]] }, { aoa: true });
+        const imp = await request(app).post("/api/importar/items").set(auth(adminToken)).attach("archivo", buf, "export.xlsx");
+        assert.equal(imp.status, 400);
+        assert.match(imp.body.error, /no tiene la columna "codigo"/);
+    });
+});
+
 describe("Módulo Carros y revisión pública", () => {
     let carroId, itemId;
 
@@ -1870,5 +2021,63 @@ describe("Carga completa desde Excel con cuentas vinculadas a bomberos", () => {
         assert.equal(c1.bombero_id, nuevoId, "se re-vincula por nombre al bombero recreado");
         assert.equal(c1.bombero_nombre, "Bombero Permanece");
         assert.equal(c2.bombero_id, null, "quien ya no está en el Excel queda sin vínculo");
+    });
+});
+
+// También al final: la carga completa reemplaza los datos de la BD
+describe("Carga completa: ubicaciones conservan su id y su QR", () => {
+    test("las que siguen en el Excel mantienen id/código; las nuevas no reutilizan ids; las ausentes se eliminan", async () => {
+        const carro = await request(app).post("/api/ubicaciones").set(auth(adminToken)).send({ nombre: "Carro QR Fijo", tipo: "CARRO" });
+        const sale  = await request(app).post("/api/ubicaciones").set(auth(adminToken)).send({ nombre: "Bodega Que Sale", tipo: "BODEGA" });
+        assert.equal(carro.status, 201, JSON.stringify(carro.body));
+        const antes = db.prepare("SELECT id, codigo_qr FROM ubicacion WHERE id = ?").get(carro.body.id);
+        const maxIdAntes = db.prepare("SELECT MAX(id) m FROM ubicacion").get().m;
+        const totalAntes = db.prepare("SELECT COUNT(*) n FROM ubicacion").get().n;
+
+        const imp = await request(app).post("/api/importar").set(auth(adminToken)).attach("archivo", libroExcel({
+            Bomberos: [{ nombre: "Bombero QR" }],
+            Ubicaciones: [
+                { nombre: "Carro QR Fijo", tipo: "carro", responsable: "Nuevo encargado", activo: 1 },
+                { nombre: "Bodega Nueva QR", tipo: "BODEGA" },
+            ],
+            Items: [{ codigo: "QR-0001", categoria: "HERRAMIENTA", descripcion: "Hacha del carro", ubicacion_nombre: "Carro QR Fijo", ubicacion_detalle: "Gaveta 1" }],
+            Controles: [{ codigo_item: "QR-0001", tipo: "INSPECCION", fecha_objetivo: "2027-01-01" }],
+        }), "carga.xlsx");
+        assert.equal(imp.status, 200, JSON.stringify(imp.body));
+        assert.equal(imp.body.resumen.ubicaciones_conservadas, 1);
+        assert.equal(imp.body.resumen.ubicaciones_nuevas, 1);
+        assert.equal(imp.body.resumen.ubicaciones_eliminadas, totalAntes - 1);
+
+        const despues = db.prepare("SELECT id, codigo_qr, responsable FROM ubicacion WHERE nombre = 'Carro QR Fijo'").get();
+        assert.equal(despues.id, antes.id, "el QR impreso (/revision-carro/:id) sigue apuntando al mismo carro");
+        assert.equal(despues.codigo_qr, antes.codigo_qr);
+        assert.equal(despues.responsable, "Nuevo encargado", "sus datos sí se actualizan desde el Excel");
+
+        const nueva = db.prepare("SELECT id, codigo_qr FROM ubicacion WHERE nombre = 'Bodega Nueva QR'").get();
+        assert.ok(nueva.id > maxIdAntes, "una ubicación nueva nunca toma el id de una eliminada");
+        assert.equal(nueva.codigo_qr, `UBIC-${String(nueva.id).padStart(4, "0")}`);
+        assert.equal(db.prepare("SELECT COUNT(*) n FROM ubicacion WHERE id = ?").get(sale.body.id).n, 0);
+
+        // El QR de revisión pegado en el carro sigue funcionando y muestra sus ítems
+        const publico = await request(app).get(`/api/carros-publico/${antes.id}`);
+        assert.equal(publico.status, 200, JSON.stringify(publico.body));
+        assert.ok(JSON.stringify(publico.body).includes("QR-0001"));
+    });
+
+    test("un archivo con errores no borra nada ni crea respaldo", async () => {
+        const items = db.prepare("SELECT COUNT(*) n FROM item").get().n;
+        const backupsDir = path.join(TMP_DIR, "backups");
+        const respaldos = () => (fs.existsSync(backupsDir) ? fs.readdirSync(backupsDir).length : 0);
+        const respaldosAntes = respaldos();
+
+        const imp = await request(app).post("/api/importar").set(auth(adminToken)).attach("archivo", libroExcel({
+            Bomberos: [{ nombre: "Otro" }], Ubicaciones: [{ nombre: "Otra" }],
+            Items: [{ codigo: "MAL-1", estado: "Fuera de uso" }],
+            Controles: [{ codigo_item: "NO-EXISTE", tipo: "INSPECCION", fecha_objetivo: "2027-01-01" }],
+        }), "carga.xlsx");
+        assert.equal(imp.status, 400);
+        assert.equal(imp.body.errores.length, 2, JSON.stringify(imp.body));
+        assert.equal(db.prepare("SELECT COUNT(*) n FROM item").get().n, items);
+        assert.equal(respaldos(), respaldosAntes);
     });
 });

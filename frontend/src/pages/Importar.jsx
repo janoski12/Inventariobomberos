@@ -80,7 +80,10 @@ export default function Importar() {
 
           <div className="importar-aviso">
             <strong>Atención:</strong> Esta operación borrará y reemplazará <strong>todos</strong> los
-            datos existentes (ítems, bomberos, ubicaciones y controles). Esta acción no se puede deshacer.
+            ítems, bomberos y controles, y <strong>todo el historial</strong>: movimientos, actas de
+            entrega (también las pendientes de firma) y revisiones de carros. Las ubicaciones que sigan
+            en el archivo conservan su código y su QR impreso; las que no estén se eliminan.
+            Esta acción no se puede deshacer (se guarda un respaldo automático antes).
           </div>
 
           <div className="stack importar-zona">
@@ -125,6 +128,12 @@ export default function Importar() {
                   <div className="card"><div className="stat-number text-total">{resultado.items}</div><div className="stat-label">Ítems</div></div>
                   <div className="card"><div className="stat-number text-total">{resultado.controles}</div><div className="stat-label">Controles</div></div>
                 </div>
+                {resultado.ubicaciones_conservadas !== undefined && (
+                  <p className="muted">
+                    Ubicaciones: {resultado.ubicaciones_conservadas} conservadas (mismo QR),{" "}
+                    {resultado.ubicaciones_nuevas} nuevas, {resultado.ubicaciones_eliminadas} eliminadas.
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -137,14 +146,16 @@ export default function Importar() {
       <p className="importar-seccion-label">Importación parcial</p>
       <p className="muted">
         Agrega o actualiza solo una sección. No borra datos existentes — los registros con el mismo
-        nombre/código se actualizan, los nuevos se insertan.
+        nombre/código se actualizan, los nuevos se insertan. Una celda vacía (o una columna que no
+        viene) conserva el valor actual; para borrar un dato, hazlo desde la ficha. Si algún valor
+        no es válido, no se importa nada y se indica la hoja y la fila.
         Orden recomendado: <strong>Ubicaciones → Bomberos → Ítems</strong>.
       </p>
 
       <div className="stack importar-parcial-stack">
         <SeccionParcial
           titulo="Ubicaciones"
-          descripcion="Upsert por nombre. Tipos válidos: BODEGA, SALA, CARRO, CASILLERO, CONTAINER, SALON, OTRO."
+          descripcion="Upsert por nombre. Tipos válidos: BODEGA, SALA, CARRO, CASILLERO, CONTAINER, SALON, OTRO. Activo: 1/0 o SI/NO."
           seccion="ubicaciones"
         />
         <SeccionParcial
@@ -155,9 +166,9 @@ export default function Importar() {
         />
         <SeccionParcial
           titulo="Ítems"
-          descripcion="Upsert por código. Incluye fechas (fabricación, recepción, vencimiento) y hoja Controles (opcional, siempre aditiva)."
+          descripcion="Upsert por código. Categoría: EPP, TRAUMA, HERRAMIENTA, COMUNICACION, OTRO. Estado: OPERATIVO, MANTENCION, FUERA_SERVICIO, BAJA. Criticidad: BAJA, MEDIA, ALTA. Incluye fechas y hoja Controles (opcional, siempre aditiva)."
           seccion="items"
-          nota="Los bomberos y ubicaciones referenciados deben existir en el sistema antes de importar. Las fechas aceptan formato AAAA-MM-DD o DD/MM/AAAA; si vienen vacías no borran las existentes. Si ubicación y bombero vienen vacíos, el ítem conserva su asignación actual. ubicacion_detalle (gaveta/compartimiento dentro de un carro) también se conserva si viene vacío."
+          nota="Los bomberos y ubicaciones referenciados deben existir en el sistema antes de importar. Mayúsculas y tildes dan igual ('Fuera de servicio' o 'mantención' se aceptan). Las fechas aceptan formato AAAA-MM-DD o DD/MM/AAAA. Si ubicación y bombero vienen vacíos, el ítem conserva su asignación actual. En un ítem nuevo, categoría, estado y criticidad vacíos quedan como OTRO, OPERATIVO y MEDIA."
         />
       </div>
     </div>

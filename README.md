@@ -320,6 +320,29 @@ por el flujo normal.
 > con el enlace o una foto del QR puede hacerlo. Es un riesgo aceptado para una
 > red interna de cuartel, no para un despliegue expuesto a internet.
 
+## Importación desde Excel
+
+Pestaña **Importar**. Las plantillas descargables traen los encabezados exactos que se
+esperan en la fila 1 de cada hoja.
+
+- **Parcial** (ubicaciones, bomberos o ítems): crea los registros nuevos y actualiza los
+  existentes (por nombre, o por código en los ítems). Una **celda vacía, o una columna que
+  no viene, conserva el valor actual**: un Excel con solo `codigo` y `estado` cambia solo
+  el estado. Para borrar un dato se usa la ficha.
+- **Completa** *(solo admin)*: reemplaza bomberos, ítems y controles, y **borra el
+  historial** (movimientos, actas —incluidas las pendientes— y revisiones de carros).
+  Las ubicaciones que siguen en el archivo **conservan su id y su QR**, así que las
+  etiquetas ya pegadas en carros y bodegas siguen funcionando; las que no están en el
+  archivo se eliminan, y su id no se reutiliza. Antes de escribir se guarda un respaldo
+  `pre_carga_completa_*`. También se puede correr por consola:
+  `node scripts/importar_excel.js archivo.xlsx`.
+- **Catálogos** (categoría, estado, criticidad, tipo de ubicación, estado del bombero,
+  tipo y resultado de control): no importan las mayúsculas, las tildes ni la palabra
+  "de" (`Fuera de servicio` → `FUERA_SERVICIO`, `mantención` → `MANTENCION`). Un valor
+  que no se reconoce **detiene la importación** y se informa la hoja y la fila de cada
+  error; no se importa ninguna fila hasta corregirlo. En un registro nuevo, un catálogo
+  vacío toma su valor por defecto (`OTRO`, `OPERATIVO`, `MEDIA`, `ACTIVO`...).
+
 ## Respaldo y restauración
 
 - **Automático**: al arrancar y cada 24 h el servidor guarda una copia en
