@@ -4,7 +4,7 @@ const { ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, isNil, cleanText, badRequest, no
 const { quienRegistra } = require("../lib/auth");
 const { itemsDeActa } = require("./actas");
 const { borrarSiExiste } = require("../lib/documentos");
-const { generarExcelInventario } = require("../lib/exportarInventario");
+const { generarReporteInventario } = require("../lib/exportarInventario");
 
 //Crear items
 router.post("/items", (req, res) => {
@@ -224,48 +224,27 @@ router.get("/items/:id/movimientos", (req, res) => {
     }
 });
 
-// Exportar inventario filtrado a Excel
+// Exportar el inventario completo a Excel, en varias hojas: todo, trauma,
+// asignados a bomberos, y una por cada ubicación activa (ver
+// lib/exportarInventario.js). No filtra por los parametros de busqueda de
+// la pantalla: siempre es el reporte completo.
 router.get("/items/exportar", async (req, res) => {
     try {
-        const q            = (req.query.q          ?? "").trim();
-        const estado       = (req.query.estado     ?? "").trim();
-        const categoria    = (req.query.categoria  ?? "").trim();
-        const criticidad   = (req.query.criticidad ?? "").trim();
-        const bombero_id   = req.query.bombero_id  ? Number(req.query.bombero_id)  : null;
-        const ubicacion_id = req.query.ubicacion_id? Number(req.query.ubicacion_id): null;
-        const ubicacion_detalle = cleanText(req.query.ubicacion_detalle);
-
-        if (estado     && !ESTADOS_ITEM.includes(estado))
-            return badRequest(res, `estado inválido. Use: ${ESTADOS_ITEM.join(", ")}`);
-        if (categoria  && !CATEGORIAS.includes(categoria))
-            return badRequest(res, `categoria inválida. Use: ${CATEGORIAS.join(", ")}`);
-        if (criticidad && !CRITICIDADES.includes(criticidad))
-            return badRequest(res, `criticidad inválida. Use: ${CRITICIDADES.join(", ")}`);
-
-        const conditions = [], params = [];
-        if (q)           { conditions.push("(i.codigo LIKE ? OR i.descripcion LIKE ?)"); params.push(`%${q}%`, `%${q}%`); }
-        if (estado)      { conditions.push("i.estado = ?");               params.push(estado); }
-        if (categoria)   { conditions.push("i.categoria = ?");            params.push(categoria); }
-        if (criticidad)  { conditions.push("i.criticidad = ?");           params.push(criticidad); }
-        if (bombero_id)  { conditions.push("i.asignado_bombero_id = ?");  params.push(bombero_id); }
-        if (ubicacion_id){ conditions.push("i.ubicacion_actual_id = ?");  params.push(ubicacion_id); }
-        if (ubicacion_detalle) { conditions.push("i.ubicacion_detalle = ?"); params.push(ubicacion_detalle); }
-
-        const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
         const rows = db.prepare(`
             SELECT i.codigo, i.descripcion, i.categoria, i.subcategoria, i.estado, i.criticidad,
                    i.marca, i.modelo, i.serie, i.talla,
-                   b.nombre AS asignado_a, u.nombre AS ubicacion, i.ubicacion_detalle,
+                   b.nombre AS asignado_a, i.asignado_bombero_id,
+                   u.nombre AS ubicacion, i.ubicacion_actual_id, i.ubicacion_detalle,
                    i.fecha_recepcion, i.fecha_vencimiento, i.fecha_fabricacion
             FROM item i
             LEFT JOIN ubicacion u ON u.id = i.ubicacion_actual_id
             LEFT JOIN bombero   b ON b.id = i.asignado_bombero_id
-            ${where}
             ORDER BY i.codigo
-        `).all(...params);
+        `).all();
+        const ubicaciones = db.prepare("SELECT id, nombre FROM ubicacion WHERE activo = 1 ORDER BY nombre").all();
 
         const fecha = fechaLocalISO();
-        const buf = await generarExcelInventario(rows, fecha);
+        const buf = await generarReporteInventario(rows, ubicaciones, fecha);
 
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename="inventario_${fecha}.xlsx"`);

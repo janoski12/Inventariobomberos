@@ -232,16 +232,17 @@ export default function BusquedaItems() {
                 <div className={error ? "error" : "muted"}>{resumen}</div>
                 <button
                     className="btn-light"
-                    disabled={exportando || items.length === 0}
+                    disabled={exportando}
+                    title="Exporta el inventario completo en varias hojas (todo, trauma, asignados a bomberos, por ubicación); no depende de los filtros de esta búsqueda."
                     onClick={async () => {
                         try {
                             setExportando(true);
-                            await exportarItems({ q: debouncedQ, estado: filtroEstado, categoria: filtroCategoria, criticidad: filtroCriticidad, bombero_id: filtroBombero, ubicacion_id: filtroUbicacion, ubicacion_detalle: filtroGaveta });
+                            await exportarItems();
                         } catch { toast("No se pudo exportar. Revisa que el backend esté activo."); }
                         finally { setExportando(false); }
                     }}
                 >
-                    {exportando ? "Exportando..." : "Exportar Excel"}
+                    {exportando ? "Exportando..." : "Exportar reporte completo"}
                 </button>
             </div>
 

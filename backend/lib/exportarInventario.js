@@ -93,13 +93,42 @@ function construirHojaInventario(ws, rows, fechaTexto) {
     };
 }
 
-// rows: filas ya resueltas desde la BD (codigo, descripcion, ..., asignado_a,
-// ubicacion, ubicacion_detalle, ...), en el mismo orden en que deben salir.
-async function generarExcelInventario(rows, fechaTexto) {
+// Nombre de hoja válido para Excel: sin : \ / ? * [ ], máximo 31 caracteres,
+// único dentro del libro (si dos ubicaciones distintas truncan igual, se
+// numeran). usados debe ir en minúsculas.
+function nombreHojaUnico(nombre, usados) {
+    const limpio = (nombre || "Ubicación").replace(/[:\\/?*[\]]/g, " ").trim().slice(0, 31) || "Ubicación";
+    let candidato = limpio;
+    let n = 2;
+    while (usados.has(candidato.toLowerCase())) {
+        const sufijo = ` (${n++})`;
+        candidato = limpio.slice(0, 31 - sufijo.length) + sufijo;
+    }
+    usados.add(candidato.toLowerCase());
+    return candidato;
+}
+
+// Reporte completo del inventario, en varias hojas: todo, trauma, asignados
+// a bomberos, y una por cada ubicación activa (incluso si está vacía). Cada
+// hoja usa el mismo formato (título, encabezados, colores, filtro).
+// ubicacionesActivas: [{ id, nombre }], en el orden en que deben salir sus hojas.
+async function generarReporteInventario(rows, ubicacionesActivas, fechaTexto) {
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet("Inventario");
-    construirHojaInventario(ws, rows, fechaTexto);
+    const usados = new Set();
+
+    const agregarHoja = (nombre, filas) => {
+        const ws = wb.addWorksheet(nombreHojaUnico(nombre, usados));
+        construirHojaInventario(ws, filas, fechaTexto);
+    };
+
+    agregarHoja("Inventario Completo", rows);
+    agregarHoja("Trauma", rows.filter((r) => r.categoria === "TRAUMA"));
+    agregarHoja("Asignados a Bomberos", rows.filter((r) => r.asignado_bombero_id));
+    for (const u of ubicacionesActivas) {
+        agregarHoja(u.nombre, rows.filter((r) => r.ubicacion_actual_id === u.id));
+    }
+
     return wb.xlsx.writeBuffer();
 }
 
-module.exports = { generarExcelInventario };
+module.exports = { generarReporteInventario };

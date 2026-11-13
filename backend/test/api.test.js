@@ -1598,10 +1598,9 @@ describe("Sub-filtro de gaveta al buscar dentro de un carro", () => {
         );
     });
 
-    // supertest no trae un parser para xlsx: hay que juntar los bytes crudos
-    // a mano para poder leer el archivo (si no, res.body llega vacío).
-    async function descargarExportacion(query) {
-        const res = await request(app).get(`/api/items/exportar${query}`)
+    test("GET /items/exportar ya no filtra por query: la hoja de esa ubicación trae los 3 items de todas las gavetas", async () => {
+        const ExcelJS = require("exceljs");
+        const res = await request(app).get(`/api/items/exportar?ubicacion_id=${carroId}&ubicacion_detalle=${encodeURIComponent("Gaveta 2")}`)
             .set(auth(adminToken))
             .buffer(true)
             .parse((res, cb) => {
@@ -1609,33 +1608,21 @@ describe("Sub-filtro de gaveta al buscar dentro de un carro", () => {
                 res.on("data", (c) => chunks.push(c));
                 res.on("end", () => cb(null, Buffer.concat(chunks)));
             });
-        return res;
-    }
-
-    test("GET /items/exportar respeta el sub-filtro de gaveta e incluye la columna Gaveta/Detalle", async () => {
-        const ExcelJS = require("exceljs");
-        const res = await descargarExportacion(`?ubicacion_id=${carroId}&ubicacion_detalle=${encodeURIComponent("Gaveta 2")}`);
         assert.equal(res.status, 200);
 
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(res.body);
-        const ws = wb.getWorksheet("Inventario");
-
-        // Fila 4 = encabezados (filas 1-2 son título/subtítulo, la 3 queda en blanco)
-        const encabezados = ws.getRow(4).values;
-        assert.ok(encabezados.includes("Gaveta/Detalle"));
-        const colGaveta = encabezados.indexOf("Gaveta/Detalle");
-
-        assert.equal(ws.rowCount, 5, "título + subtítulo + blanco + encabezado + 1 fila de datos");
-        assert.equal(ws.getRow(5).getCell(colGaveta).value, "Gaveta 2");
+        const ws = wb.getWorksheet("Carro Gavetas Test");
+        assert.ok(ws, "debe existir una hoja con el nombre de la ubicación");
+        assert.equal(ws.rowCount, 7, "título + subtítulo + blanco + encabezado + 3 items (ignora los parámetros de query)");
     });
 });
 
-describe("Exportación de inventario a Excel: formato legible", () => {
+describe("Exportación de inventario a Excel: varias hojas (todo, trauma, asignados, por ubicación)", () => {
     const ExcelJS = require("exceljs");
-    let bomberoId, ubicacionId, itemAsignadoId, itemUbicadoId;
+    let bomberoId, ubicacionId, itemAsignadoId, itemUbicadoId, itemTraumaId;
 
-    test("preparar un ítem asignado a un bombero y otro solo ubicado", async () => {
+    test("preparar un ítem asignado a un bombero, uno solo ubicado, y uno de categoría TRAUMA", async () => {
         const bom = await request(app).post("/api/bomberos").set(auth(adminToken))
             .send({ nombre: "Bombero Export Test" });
         bomberoId = bom.body.id;
@@ -1655,10 +1642,14 @@ describe("Exportación de inventario a Excel: formato legible", () => {
         const item2 = await request(app).post("/api/items").set(auth(adminToken))
             .send({ categoria: "EPP", descripcion: "Item Ubicado Export", ubicacion_actual_id: ubicacionId, estado: "OPERATIVO" });
         itemUbicadoId = item2.body.id;
+
+        const item3 = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ categoria: "TRAUMA", descripcion: "Item Trauma Export", ubicacion_actual_id: ubicacionId });
+        itemTraumaId = item3.body.id;
     });
 
-    async function descargarYLeer(query) {
-        const res = await request(app).get(`/api/items/exportar${query}`)
+    async function descargarLibro() {
+        const res = await request(app).get("/api/items/exportar")
             .set(auth(adminToken))
             .buffer(true)
             .parse((res, cb) => {
@@ -1669,50 +1660,93 @@ describe("Exportación de inventario a Excel: formato legible", () => {
         assert.equal(res.status, 200);
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(res.body);
-        return wb.getWorksheet("Inventario");
+        return wb;
+    }
+
+    function codigosDeHoja(ws) {
+        if (!ws) return [];
+        const colCodigo = ws.getRow(4).values.indexOf("Código");
+        const codigos = [];
+        for (let n = 5; n <= ws.rowCount; n++) codigos.push(ws.getRow(n).getCell(colCodigo).value);
+        return codigos;
     }
 
     function filaDelCodigo(ws, codigo) {
-        const encabezados = ws.getRow(4).values;
-        const colCodigo = encabezados.indexOf("Código");
+        const colCodigo = ws.getRow(4).values.indexOf("Código");
         for (let n = 5; n <= ws.rowCount; n++) {
             if (ws.getRow(n).getCell(colCodigo).value === codigo) return ws.getRow(n);
         }
         return null;
     }
 
-    test("el ítem asignado a un bombero queda con un tinte distinto al que solo está ubicado", async () => {
+    test("hoja 'Inventario Completo' trae los tres items", async () => {
+        const codAsignado = (await request(app).get(`/api/items/${itemAsignadoId}`).set(auth(adminToken))).body.codigo;
+        const codUbicado  = (await request(app).get(`/api/items/${itemUbicadoId}`).set(auth(adminToken))).body.codigo;
+        const codTrauma   = (await request(app).get(`/api/items/${itemTraumaId}`).set(auth(adminToken))).body.codigo;
+
+        const wb = await descargarLibro();
+        const codigos = codigosDeHoja(wb.getWorksheet("Inventario Completo"));
+        for (const c of [codAsignado, codUbicado, codTrauma]) assert.ok(codigos.includes(c));
+    });
+
+    test("hoja 'Trauma' trae solo el item de categoría TRAUMA", async () => {
+        const codTrauma = (await request(app).get(`/api/items/${itemTraumaId}`).set(auth(adminToken))).body.codigo;
+        const codUbicado = (await request(app).get(`/api/items/${itemUbicadoId}`).set(auth(adminToken))).body.codigo;
+
+        const wb = await descargarLibro();
+        const codigos = codigosDeHoja(wb.getWorksheet("Trauma"));
+        assert.ok(codigos.includes(codTrauma));
+        assert.ok(!codigos.includes(codUbicado));
+    });
+
+    test("hoja 'Asignados a Bomberos' trae solo el item asignado, con el tinte celeste", async () => {
         const codAsignado = (await request(app).get(`/api/items/${itemAsignadoId}`).set(auth(adminToken))).body.codigo;
         const codUbicado  = (await request(app).get(`/api/items/${itemUbicadoId}`).set(auth(adminToken))).body.codigo;
 
-        const ws = await descargarYLeer(`?q=Export`);
-        const filaAsignada = filaDelCodigo(ws, codAsignado);
-        const filaUbicada  = filaDelCodigo(ws, codUbicado);
-        assert.ok(filaAsignada && filaUbicada);
+        const wb = await descargarLibro();
+        const ws = wb.getWorksheet("Asignados a Bomberos");
+        const codigos = codigosDeHoja(ws);
+        assert.ok(codigos.includes(codAsignado));
+        assert.ok(!codigos.includes(codUbicado));
 
-        const colorAsignada = filaAsignada.getCell(1).fill?.fgColor?.argb;
-        const colorUbicada  = filaUbicada.getCell(1).fill?.fgColor?.argb;
-        assert.equal(colorAsignada, "FFE3F2FD", "la fila asignada debe tener el tinte de 'asignado a bombero'");
-        assert.notEqual(colorUbicada, "FFE3F2FD", "la fila solo ubicada no debe llevar ese tinte");
-    });
-
-    test("el estado se destaca con color (ej. FUERA_SERVICIO en rojo)", async () => {
-        const codAsignado = (await request(app).get(`/api/items/${itemAsignadoId}`).set(auth(adminToken))).body.codigo;
-        const ws = await descargarYLeer(`?q=Export`);
-        const encabezados = ws.getRow(4).values;
-        const colEstado = encabezados.indexOf("Estado");
         const fila = filaDelCodigo(ws, codAsignado);
-        assert.equal(fila.getCell(colEstado).font?.color?.argb, "FFC62828");
+        assert.equal(fila.getCell(1).fill?.fgColor?.argb, "FFE3F2FD");
+
+        const colEstado = ws.getRow(4).values.indexOf("Estado");
+        assert.equal(fila.getCell(colEstado).font?.color?.argb, "FFC62828", "FUERA_SERVICIO en rojo");
     });
 
-    test("encabezado con relleno/negrita, panel congelado y autofiltro sobre la fila de encabezados", async () => {
-        const ws = await descargarYLeer(`?q=Export`);
+    test("hoja con el nombre de la ubicación trae solo lo que está ahí (incluye el item TRAUMA, no el asignado)", async () => {
+        const codUbicado = (await request(app).get(`/api/items/${itemUbicadoId}`).set(auth(adminToken))).body.codigo;
+        const codTrauma  = (await request(app).get(`/api/items/${itemTraumaId}`).set(auth(adminToken))).body.codigo;
+        const codAsignado = (await request(app).get(`/api/items/${itemAsignadoId}`).set(auth(adminToken))).body.codigo;
+
+        const wb = await descargarLibro();
+        const codigos = codigosDeHoja(wb.getWorksheet("Bodega Export Test"));
+        assert.ok(codigos.includes(codUbicado));
+        assert.ok(codigos.includes(codTrauma));
+        assert.ok(!codigos.includes(codAsignado));
+    });
+
+    test("encabezado con relleno/negrita, panel congelado y autofiltro en cada hoja", async () => {
+        const wb = await descargarLibro();
+        const ws = wb.getWorksheet("Inventario Completo");
         const celdaEncabezado = ws.getRow(4).getCell(1);
         assert.equal(celdaEncabezado.font?.bold, true);
         assert.ok(celdaEncabezado.fill?.fgColor?.argb);
         assert.equal(ws.views?.[0]?.state, "frozen");
         assert.equal(ws.views?.[0]?.ySplit, 4);
         assert.equal(ws.autoFilter, "A4:P4");
+    });
+
+    test("una ubicación con caracteres inválidos para un nombre de hoja no rompe la exportación", async () => {
+        await request(app).post("/api/ubicaciones").set(auth(adminToken))
+            .send({ nombre: "Carro: B-10 / Turno [A]", tipo: "CARRO" });
+
+        const wb = await descargarLibro();
+        const nombres = wb.worksheets.map((ws) => ws.name);
+        assert.ok(nombres.every((n) => n.length <= 31 && !/[:\\/?*[\]]/.test(n)), nombres.join(", "));
+        assert.equal(new Set(nombres).size, nombres.length, "los nombres de hoja deben ser únicos");
     });
 });
 

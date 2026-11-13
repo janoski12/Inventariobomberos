@@ -56,17 +56,10 @@ export function eliminarItem(id) {
   return request(`${API_URL}/items/${id}`, { method: "DELETE" });
 }
 
-export async function exportarItems({ q = "", estado = "", categoria = "", criticidad = "", bombero_id = "", ubicacion_id = "", ubicacion_detalle = "" } = {}) {
-  const params = new URLSearchParams();
-  if (q?.trim())        params.set("q",                q.trim());
-  if (estado)           params.set("estado",            estado);
-  if (categoria)        params.set("categoria",         categoria);
-  if (criticidad)       params.set("criticidad",        criticidad);
-  if (bombero_id)       params.set("bombero_id",        bombero_id);
-  if (ubicacion_id)     params.set("ubicacion_id",      ubicacion_id);
-  if (ubicacion_detalle)params.set("ubicacion_detalle", ubicacion_detalle);
-  const qs = params.toString();
-  const res = await fetch(`${API_URL}/items/exportar${qs ? `?${qs}` : ""}`);
+// Reporte completo del inventario (varias hojas: todo, trauma, asignados a
+// bomberos, por ubicación). No depende de los filtros de la pantalla.
+export async function exportarItems() {
+  const res = await fetch(`${API_URL}/items/exportar`);
   if (!res.ok) throw new Error(`Error ${res.status}`);
   const blob = await res.blob();
   const fecha = fechaLocalISO();
