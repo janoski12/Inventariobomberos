@@ -1,8 +1,8 @@
 #!/bin/bash
 # Sincroniza (cifrado) los backups de la base de datos y los documentos
-# firmados (actas) hacia Google Drive. Corre en el HOST via cron (ver
-# README de este directorio), ejecutando rclone DENTRO del contenedor,
-# donde rclone y su config viven en el volumen persistente
+# firmados (actas) hacia Google Drive. Corre en el HOST via cron (instalado
+# a mano: "15 3 * * * $HOME/bin/backup-nube.sh"), ejecutando rclone DENTRO
+# del contenedor, donde rclone y su config viven en el volumen persistente
 # /app/backend/data/_rclone (sobreviven a "docker compose up --build").
 #
 # Si alguno de los dos sync falla, avisa por correo a la cuenta "admin"
