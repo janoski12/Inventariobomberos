@@ -2081,3 +2081,40 @@ describe("Carga completa: ubicaciones conservan su id y su QR", () => {
         assert.equal(respaldos(), respaldosAntes);
     });
 });
+
+describe("Alerta por correo cuando falla el respaldo a la nube", () => {
+    const { alertarBackupFallido } = require("../lib/alertas");
+    const enviados = [];
+    const transporteFalso = { sendMail: async (mensaje) => { enviados.push(mensaje); return { messageId: "prueba" }; } };
+
+    before(() => servicioCorreo.usarTransporteDePrueba(transporteFalso));
+    after(() => servicioCorreo.usarTransporteDePrueba(null));
+    beforeEach(() => { enviados.length = 0; });
+
+    test("sin correo en la cuenta admin, no envía nada", async () => {
+        db.prepare("UPDATE usuario SET correo = NULL WHERE username = 'admin'").run();
+        const enviado = await alertarBackupFallido("db=1 documentos=1");
+        assert.equal(enviado, false);
+        assert.equal(enviados.length, 0);
+    });
+
+    test("con correo configurado en la cuenta admin, avisa solo a esa cuenta", async () => {
+        db.prepare("UPDATE usuario SET correo = 'admin@bomberos.cl' WHERE username = 'admin'").run();
+        const enviado = await alertarBackupFallido("db=1 documentos=1");
+        assert.equal(enviado, true);
+        assert.equal(enviados.length, 1);
+        assert.equal(enviados[0].to, "admin@bomberos.cl");
+        assert.match(enviados[0].subject, /respaldo/i);
+        assert.match(enviados[0].text, /db=1 documentos=1/);
+    });
+
+    test("sin envío de correo configurado, no envía nada (y no revienta)", async () => {
+        servicioCorreo.usarTransporteDePrueba(null);
+        try {
+            const enviado = await alertarBackupFallido("db=1 documentos=1");
+            assert.equal(enviado, false);
+        } finally {
+            servicioCorreo.usarTransporteDePrueba(transporteFalso);
+        }
+    });
+});
