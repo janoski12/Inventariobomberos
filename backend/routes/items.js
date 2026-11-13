@@ -4,6 +4,7 @@ const { ESTADOS_ITEM, CRITICIDADES, CATEGORIAS, isNil, cleanText, badRequest, no
 const { quienRegistra } = require("../lib/auth");
 const { itemsDeActa } = require("./actas");
 const { borrarSiExiste } = require("../lib/documentos");
+const { generarExcelInventario } = require("../lib/exportarInventario");
 
 //Crear items
 router.post("/items", (req, res) => {
@@ -224,9 +225,8 @@ router.get("/items/:id/movimientos", (req, res) => {
 });
 
 // Exportar inventario filtrado a Excel
-router.get("/items/exportar", (req, res) => {
+router.get("/items/exportar", async (req, res) => {
     try {
-        const xlsx = require("xlsx");
         const q            = (req.query.q          ?? "").trim();
         const estado       = (req.query.estado     ?? "").trim();
         const categoria    = (req.query.categoria  ?? "").trim();
@@ -264,30 +264,9 @@ router.get("/items/exportar", (req, res) => {
             ORDER BY i.codigo
         `).all(...params);
 
-        const datos = rows.map(r => ({
-            "Código":             r.codigo,
-            "Descripción":        r.descripcion,
-            "Categoría":          r.categoria,
-            "Subcategoría":       r.subcategoria ?? "",
-            "Estado":             r.estado,
-            "Criticidad":         r.criticidad,
-            "Marca":              r.marca ?? "",
-            "Modelo":             r.modelo ?? "",
-            "Serie":              r.serie ?? "",
-            "Talla":              r.talla ?? "",
-            "Asignado a":         r.asignado_a ?? "",
-            "Ubicación":          r.ubicacion ?? "",
-            "Gaveta/Detalle":     r.ubicacion_detalle ?? "",
-            "Fecha Fabricación":  r.fecha_fabricacion ?? "",
-            "Fecha Recepción":    r.fecha_recepcion ?? "",
-            "Fecha Vencimiento":  r.fecha_vencimiento ?? "",
-        }));
-
-        const wb = xlsx.utils.book_new();
-        xlsx.utils.book_append_sheet(wb, xlsx.utils.json_to_sheet(datos), "Inventario");
-        const buf = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
-
         const fecha = fechaLocalISO();
+        const buf = await generarExcelInventario(rows, fecha);
+
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", `attachment; filename="inventario_${fecha}.xlsx"`);
         res.send(buf);

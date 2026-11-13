@@ -1598,11 +1598,67 @@ describe("Sub-filtro de gaveta al buscar dentro de un carro", () => {
         );
     });
 
+    // supertest no trae un parser para xlsx: hay que juntar los bytes crudos
+    // a mano para poder leer el archivo (si no, res.body llega vacío).
+    async function descargarExportacion(query) {
+        const res = await request(app).get(`/api/items/exportar${query}`)
+            .set(auth(adminToken))
+            .buffer(true)
+            .parse((res, cb) => {
+                const chunks = [];
+                res.on("data", (c) => chunks.push(c));
+                res.on("end", () => cb(null, Buffer.concat(chunks)));
+            });
+        return res;
+    }
+
     test("GET /items/exportar respeta el sub-filtro de gaveta e incluye la columna Gaveta/Detalle", async () => {
-        const xlsx = require("xlsx");
-        // supertest no trae un parser para xlsx: hay que juntar los bytes crudos
-        // a mano para poder leer el archivo (si no, res.body llega vacío).
-        const res = await request(app).get(`/api/items/exportar?ubicacion_id=${carroId}&ubicacion_detalle=${encodeURIComponent("Gaveta 2")}`)
+        const ExcelJS = require("exceljs");
+        const res = await descargarExportacion(`?ubicacion_id=${carroId}&ubicacion_detalle=${encodeURIComponent("Gaveta 2")}`);
+        assert.equal(res.status, 200);
+
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(res.body);
+        const ws = wb.getWorksheet("Inventario");
+
+        // Fila 4 = encabezados (filas 1-2 son título/subtítulo, la 3 queda en blanco)
+        const encabezados = ws.getRow(4).values;
+        assert.ok(encabezados.includes("Gaveta/Detalle"));
+        const colGaveta = encabezados.indexOf("Gaveta/Detalle");
+
+        assert.equal(ws.rowCount, 5, "título + subtítulo + blanco + encabezado + 1 fila de datos");
+        assert.equal(ws.getRow(5).getCell(colGaveta).value, "Gaveta 2");
+    });
+});
+
+describe("Exportación de inventario a Excel: formato legible", () => {
+    const ExcelJS = require("exceljs");
+    let bomberoId, ubicacionId, itemAsignadoId, itemUbicadoId;
+
+    test("preparar un ítem asignado a un bombero y otro solo ubicado", async () => {
+        const bom = await request(app).post("/api/bomberos").set(auth(adminToken))
+            .send({ nombre: "Bombero Export Test" });
+        bomberoId = bom.body.id;
+
+        const ubic = await request(app).post("/api/ubicaciones").set(auth(adminToken))
+            .send({ nombre: "Bodega Export Test", tipo: "BODEGA" });
+        ubicacionId = ubic.body.id;
+
+        const item1 = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ categoria: "EPP", descripcion: "Item Asignado Export", estado: "FUERA_SERVICIO" });
+        itemAsignadoId = item1.body.id;
+        const acta = await request(app).post("/api/actas-entrega").set(auth(adminToken))
+            .send({ bombero_id: bomberoId, item_ids: [itemAsignadoId] });
+        await request(app).post(`/api/actas-entrega/${acta.body.id}/confirmar`).set(auth(adminToken))
+            .attach("archivo", Buffer.from("firma de prueba"), "firma.jpg");
+
+        const item2 = await request(app).post("/api/items").set(auth(adminToken))
+            .send({ categoria: "EPP", descripcion: "Item Ubicado Export", ubicacion_actual_id: ubicacionId, estado: "OPERATIVO" });
+        itemUbicadoId = item2.body.id;
+    });
+
+    async function descargarYLeer(query) {
+        const res = await request(app).get(`/api/items/exportar${query}`)
             .set(auth(adminToken))
             .buffer(true)
             .parse((res, cb) => {
@@ -1611,10 +1667,52 @@ describe("Sub-filtro de gaveta al buscar dentro de un carro", () => {
                 res.on("end", () => cb(null, Buffer.concat(chunks)));
             });
         assert.equal(res.status, 200);
-        const wb = xlsx.read(res.body, { type: "buffer" });
-        const filas = xlsx.utils.sheet_to_json(wb.Sheets["Inventario"]);
-        assert.equal(filas.length, 1);
-        assert.equal(filas[0]["Gaveta/Detalle"], "Gaveta 2");
+        const wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(res.body);
+        return wb.getWorksheet("Inventario");
+    }
+
+    function filaDelCodigo(ws, codigo) {
+        const encabezados = ws.getRow(4).values;
+        const colCodigo = encabezados.indexOf("Código");
+        for (let n = 5; n <= ws.rowCount; n++) {
+            if (ws.getRow(n).getCell(colCodigo).value === codigo) return ws.getRow(n);
+        }
+        return null;
+    }
+
+    test("el ítem asignado a un bombero queda con un tinte distinto al que solo está ubicado", async () => {
+        const codAsignado = (await request(app).get(`/api/items/${itemAsignadoId}`).set(auth(adminToken))).body.codigo;
+        const codUbicado  = (await request(app).get(`/api/items/${itemUbicadoId}`).set(auth(adminToken))).body.codigo;
+
+        const ws = await descargarYLeer(`?q=Export`);
+        const filaAsignada = filaDelCodigo(ws, codAsignado);
+        const filaUbicada  = filaDelCodigo(ws, codUbicado);
+        assert.ok(filaAsignada && filaUbicada);
+
+        const colorAsignada = filaAsignada.getCell(1).fill?.fgColor?.argb;
+        const colorUbicada  = filaUbicada.getCell(1).fill?.fgColor?.argb;
+        assert.equal(colorAsignada, "FFE3F2FD", "la fila asignada debe tener el tinte de 'asignado a bombero'");
+        assert.notEqual(colorUbicada, "FFE3F2FD", "la fila solo ubicada no debe llevar ese tinte");
+    });
+
+    test("el estado se destaca con color (ej. FUERA_SERVICIO en rojo)", async () => {
+        const codAsignado = (await request(app).get(`/api/items/${itemAsignadoId}`).set(auth(adminToken))).body.codigo;
+        const ws = await descargarYLeer(`?q=Export`);
+        const encabezados = ws.getRow(4).values;
+        const colEstado = encabezados.indexOf("Estado");
+        const fila = filaDelCodigo(ws, codAsignado);
+        assert.equal(fila.getCell(colEstado).font?.color?.argb, "FFC62828");
+    });
+
+    test("encabezado con relleno/negrita, panel congelado y autofiltro sobre la fila de encabezados", async () => {
+        const ws = await descargarYLeer(`?q=Export`);
+        const celdaEncabezado = ws.getRow(4).getCell(1);
+        assert.equal(celdaEncabezado.font?.bold, true);
+        assert.ok(celdaEncabezado.fill?.fgColor?.argb);
+        assert.equal(ws.views?.[0]?.state, "frozen");
+        assert.equal(ws.views?.[0]?.ySplit, 4);
+        assert.equal(ws.autoFilter, "A4:P4");
     });
 });
 
