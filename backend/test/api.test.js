@@ -1739,6 +1739,26 @@ describe("Exportación de inventario a Excel: varias hojas (todo, trauma, asigna
         assert.equal(ws.autoFilter, "A4:P4");
     });
 
+    test("configuración de impresión: horizontal, ajustada a 1 página de ancho, encabezado repetido", async () => {
+        const wb = await descargarLibro();
+        const ws = wb.getWorksheet("Inventario Completo");
+        assert.equal(ws.pageSetup.orientation, "landscape");
+        assert.equal(ws.pageSetup.fitToPage, true);
+        assert.equal(ws.pageSetup.fitToWidth, 1);
+        assert.equal(ws.pageSetup.fitToHeight, 0);
+        assert.equal(ws.pageSetup.printTitlesRow, "4:4");
+        assert.match(ws.pageSetup.printArea, /^A1:P\d+$/);
+
+        // Una hoja vacía (0 items, como una ubicación sin nada todavía) igual
+        // debe tener un área de impresión válida, no romper con filas negativas
+        await request(app).post("/api/ubicaciones").set(auth(adminToken))
+            .send({ nombre: "Ubicación Vacía Export Test", tipo: "BODEGA" });
+        const wb2 = await descargarLibro();
+        const wsVacia = wb2.getWorksheet("Ubicación Vacía Export Test");
+        assert.equal(wsVacia.rowCount, 4, "sin items: solo título + subtítulo + blanco + encabezado");
+        assert.equal(wsVacia.pageSetup.printArea, "A1:P4");
+    });
+
     test("una ubicación con caracteres inválidos para un nombre de hoja no rompe la exportación", async () => {
         await request(app).post("/api/ubicaciones").set(auth(adminToken))
             .send({ nombre: "Carro: B-10 / Turno [A]", tipo: "CARRO" });

@@ -91,6 +91,21 @@ function construirHojaInventario(ws, rows, fechaTexto) {
         from: { row: FILA_ENCABEZADOS, column: 1 },
         to: { row: FILA_ENCABEZADOS, column: COLUMNAS.length },
     };
+
+    // Para cuando se imprime (ej. para llevar a una revista en papel): horizontal
+    // para que entren las 16 columnas, ajustada a 1 página de ancho (el alto
+    // puede repartirse en varias hojas), encabezado repetido en cada página
+    // impresa, y el área de impresión acotada a lo que realmente tiene datos.
+    const ultimaFila = Math.max(FILA_ENCABEZADOS, PRIMERA_FILA_DATOS + rows.length - 1);
+    const ultimaColumna = String.fromCharCode("A".charCodeAt(0) + COLUMNAS.length - 1);
+    ws.pageSetup.orientation = "landscape";
+    ws.pageSetup.fitToPage = true;
+    ws.pageSetup.fitToWidth = 1;
+    ws.pageSetup.fitToHeight = 0;
+    ws.pageSetup.horizontalCentered = true;
+    ws.pageSetup.margins = { left: 0.3, right: 0.3, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 };
+    ws.pageSetup.printArea = `A1:${ultimaColumna}${ultimaFila}`;
+    ws.pageSetup.printTitlesRow = `${FILA_ENCABEZADOS}:${FILA_ENCABEZADOS}`;
 }
 
 // Nombre de hoja válido para Excel: sin : \ / ? * [ ], máximo 31 caracteres,
